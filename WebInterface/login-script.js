@@ -222,7 +222,7 @@ loginForm.addEventListener('submit', async (e) => {
 
     // Redirect to dashboard after brief delay
     setTimeout(() => {
-      window.location.href = 'index.html';
+      window.location.href = 'dashboard.html';
     }, 1500);
 
   } catch (error) {
@@ -262,7 +262,7 @@ loginForm.addEventListener('submit', async (e) => {
 document.addEventListener('DOMContentLoaded', () => {
   // Check if already authenticated
   if (SessionManager.isAuthenticated()) {
-    window.location.href = 'index.html';
+    window.location.href = 'dashboard.html';
     return;
   }
 
