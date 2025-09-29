@@ -80,44 +80,80 @@ function showLocationStatus(message, type = 'info') {
 }
 
 function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
+  console.log('🔔 Attempting to show notification:', { title, body, permission: Notification.permission });
+
   if (!('Notification' in window)) {
-    console.warn('This browser does not support notifications');
+    console.warn('❌ This browser does not support notifications');
+    alert(`Notification: ${title}\n${body}`); // Fallback for unsupported browsers
     return;
   }
 
+  // Check permission status
   if (Notification.permission === 'granted') {
-    const notification = new Notification(title, {
-      body: body,
-      icon: icon,
-      tag: tag,
-      requireInteraction: true, // Keeps notification visible until user interacts
-      vibrate: [200, 100, 200], // Vibration pattern for mobile
-      timestamp: Date.now(),
-      actions: [
-        {
-          action: 'view',
-          title: 'View Details'
-        },
-        {
-          action: 'dismiss',
-          title: 'Dismiss'
-        }
-      ]
-    });
+    try {
+      // Create notification with Android-optimized settings
+      const notification = new Notification(title, {
+        body: body,
+        icon: icon,
+        tag: tag,
+        requireInteraction: false, // Changed for Android compatibility
+        vibrate: [200, 100, 200], // Vibration pattern for mobile
+        timestamp: Date.now(),
+        silent: false,
+        // Remove actions for Android compatibility
+        ...(!/Android/i.test(navigator.userAgent) && {
+          actions: [
+            {
+              action: 'view',
+              title: 'View Details'
+            },
+            {
+              action: 'dismiss',
+              title: 'Dismiss'
+            }
+          ]
+        })
+      });
 
-    notification.onclick = function() {
-      window.focus();
-      notification.close();
-    };
-
-    // Auto-close after 30 seconds for non-critical alerts
-    if (!title.includes('CRITICAL')) {
-      setTimeout(() => {
+      notification.onclick = function() {
+        console.log('📱 Notification clicked');
+        window.focus();
         notification.close();
-      }, 30000);
-    }
+      };
 
-    return notification;
+      notification.onerror = function(error) {
+        console.error('❌ Notification error:', error);
+      };
+
+      notification.onshow = function() {
+        console.log('✅ Notification shown successfully');
+      };
+
+      // Auto-close after 30 seconds for non-critical alerts
+      if (!title.includes('CRITICAL')) {
+        setTimeout(() => {
+          notification.close();
+        }, 30000);
+      }
+
+      return notification;
+    } catch (error) {
+      console.error('❌ Failed to create notification:', error);
+      // Fallback to alert for critical notifications
+      if (title.includes('CRITICAL') || title.includes('Test')) {
+        alert(`${title}\n${body}`);
+      }
+    }
+  } else if (Notification.permission === 'denied') {
+    console.warn('❌ Notifications are blocked by user');
+    alert(`Notification blocked. Please enable notifications in browser settings.\n\n${title}: ${body}`);
+  } else if (Notification.permission === 'default') {
+    console.log('❓ Notification permission not granted yet');
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        showNotification(title, body, icon, tag);
+      }
+    });
   }
 }
 
@@ -211,18 +247,53 @@ function startLocationWatching() {
 
 // Notification Management
 async function requestNotificationPermission() {
+  console.log('🔔 Requesting notification permission...');
+
   if (!('Notification' in window)) {
+    console.warn('❌ Notifications not supported in this browser');
     return false;
   }
 
-  if (Notification.permission === 'default') {
-    const permission = await Notification.requestPermission();
-    notificationPermission = permission === 'granted';
-    return notificationPermission;
-  }
+  console.log('Current notification permission:', Notification.permission);
 
-  notificationPermission = Notification.permission === 'granted';
-  return notificationPermission;
+  if (Notification.permission === 'default') {
+    console.log('📝 Requesting user permission for notifications...');
+
+    try {
+      const permission = await Notification.requestPermission();
+      console.log('User permission response:', permission);
+
+      notificationPermission = permission === 'granted';
+
+      if (permission === 'granted') {
+        console.log('✅ Notification permission granted');
+        // Test notification immediately on permission grant
+        setTimeout(() => {
+          showNotification(
+            '🎉 Notifications Enabled',
+            'You will now receive elephant proximity alerts!',
+            '🔔',
+            'permission-granted'
+          );
+        }, 500);
+      } else {
+        console.warn('❌ Notification permission denied');
+      }
+
+      return notificationPermission;
+    } catch (error) {
+      console.error('❌ Error requesting notification permission:', error);
+      return false;
+    }
+  } else if (Notification.permission === 'granted') {
+    console.log('✅ Notification permission already granted');
+    notificationPermission = true;
+    return true;
+  } else {
+    console.warn('❌ Notification permission denied by user');
+    notificationPermission = false;
+    return false;
+  }
 }
 
 // Subscription Management
@@ -545,13 +616,33 @@ subscriptionForm.addEventListener('submit', async (e) => {
 // Event Listeners
 requestLocationBtn.addEventListener('click', requestLocationPermission);
 
-testNotificationBtn.addEventListener('click', () => {
+testNotificationBtn.addEventListener('click', async () => {
+  console.log('🧪 Test notification button clicked');
+
+  // Check notification permission first
+  if (Notification.permission !== 'granted') {
+    console.log('❓ Requesting notification permission before test...');
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      alert('Please enable notifications in your browser settings to receive alerts.');
+      return;
+    }
+  }
+
+  console.log('🔔 Showing test notification...');
+
+  // Show test notification
   showNotification(
     '🧪 Test Notification',
     'This is a test elephant alert notification. Your alerts are working correctly!',
     '🐘',
     'test-alert'
   );
+
+  // Also show success message in UI
+  setTimeout(() => {
+    console.log('✅ Test notification sent');
+  }, 1000);
 });
 
 manageSubscriptionBtn.addEventListener('click', () => {
@@ -639,8 +730,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 2000);
   }
 
-  // Request notification permission on page load
-  requestNotificationPermission();
+  // Request notification permission on page load and show status
+  requestNotificationPermission().then(granted => {
+    console.log('📱 Initial notification permission check:', granted ? 'Granted' : 'Denied/Not requested');
+
+    // Add visual indicator for notification status
+    if (granted) {
+      console.log('🔔 Notifications are enabled');
+    } else {
+      console.log('🔕 Notifications are disabled - user will need to enable them manually');
+    }
+  });
 
   // Check if geolocation is supported
   if (!navigator.geolocation) {
