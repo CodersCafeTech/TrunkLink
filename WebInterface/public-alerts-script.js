@@ -883,6 +883,72 @@ window.TrunkLinkAlerts = {
     };
     sendProximityAlert('TEST_ELEPHANT', mockElephantData, distance);
   },
+  // Add test elephant location to Firebase
+  addTestElephantLocation: async (latitude = 12.10578888, longitude = 75.5762537) => {
+    try {
+      console.log('🐘 Adding test elephant location to Firebase...');
+
+      if (!userLocation) {
+        console.error('❌ No user location available');
+        return;
+      }
+
+      // Calculate distance from user
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        latitude,
+        longitude
+      );
+
+      console.log(`📏 Test elephant will be ${distance.toFixed(2)}km from your location`);
+
+      const testElephantId = 'test_elephant_proximity';
+      const locationId = '-OHN0VN2137decdTaHuM';
+
+      const locationData = {
+        latitude: latitude,
+        longitude: longitude,
+        timestamp: "2025-09-28T11:15:19.171Z"
+      };
+
+      // Add to Firebase
+      await database.ref(`elephants/${testElephantId}/locations/${locationId}`).set(locationData);
+
+      console.log('✅ Test elephant location added to Firebase');
+      console.log('📍 Location:', locationData);
+      console.log(`📏 Distance from you: ${distance.toFixed(2)}km`);
+
+      // Also add a more recent location for real-time testing
+      const recentLocationId = 'recent_' + Date.now();
+      const recentLocationData = {
+        latitude: latitude,
+        longitude: longitude,
+        timestamp: new Date().toISOString()
+      };
+
+      await database.ref(`elephants/${testElephantId}/locations/${recentLocationId}`).set(recentLocationData);
+      console.log('✅ Recent test location also added');
+
+      // If within 5km, should trigger alert
+      if (distance <= 5) {
+        console.log('🚨 Test elephant is within 5km - alert should be triggered!');
+      } else {
+        console.log('✅ Test elephant is beyond 5km - no alert expected');
+      }
+
+      return {
+        elephantId: testElephantId,
+        distance: distance,
+        location: locationData,
+        shouldAlert: distance <= 5
+      };
+
+    } catch (error) {
+      console.error('❌ Error adding test elephant location:', error);
+      return null;
+    }
+  },
   // Check current monitoring status
   getMonitoringStatus: () => {
     return {
@@ -891,5 +957,14 @@ window.TrunkLinkAlerts = {
       notificationPermission: notificationPermission,
       isMonitoring: !!subscriptionId && !!userLocation
     };
+  },
+  // Remove test elephant data
+  removeTestElephant: async () => {
+    try {
+      await database.ref('elephants/test_elephant_proximity').remove();
+      console.log('✅ Test elephant data removed');
+    } catch (error) {
+      console.error('❌ Error removing test elephant:', error);
+    }
   }
 };
