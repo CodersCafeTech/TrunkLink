@@ -406,20 +406,48 @@ function getLatestLocation(locations) {
 
 // Proximity Monitoring
 function startProximityMonitoring() {
-  if (!subscriptionId) return;
+  console.log('🌍 Starting proximity monitoring...');
+
+  if (!subscriptionId) {
+    console.error('❌ Cannot start proximity monitoring: No subscription ID');
+    return;
+  }
+
+  if (!userLocation) {
+    console.error('❌ Cannot start proximity monitoring: No user location');
+    return;
+  }
+
+  console.log('✅ Starting proximity monitoring with:', {
+    subscriptionId: subscriptionId,
+    userLocation: userLocation
+  });
 
   // Listen for elephant location updates
   database.ref('elephants').on('value', (snapshot) => {
-    if (!userLocation) return;
+    console.log('🐘 Elephant data update received');
+
+    if (!userLocation) {
+      console.warn('⚠️ No user location available for proximity check');
+      return;
+    }
 
     const elephants = snapshot.val();
-    if (!elephants) return;
+    if (!elephants) {
+      console.warn('⚠️ No elephant data received');
+      return;
+    }
+
+    console.log('📊 Checking proximity for', Object.keys(elephants).length, 'elephants');
+    console.log('👤 User location:', userLocation);
 
     Object.keys(elephants).forEach(elephantKey => {
       const elephant = elephants[elephantKey];
+      console.log(`🔍 Checking elephant: ${elephantKey}`, elephant);
 
       if (elephant.locations) {
         const latestLocation = getLatestLocation(elephant.locations);
+        console.log(`📍 Latest location for ${elephantKey}:`, latestLocation);
 
         if (latestLocation && latestLocation.latitude && latestLocation.longitude) {
           const distance = calculateDistance(
@@ -429,8 +457,12 @@ function startProximityMonitoring() {
             parseFloat(latestLocation.longitude)
           );
 
+          console.log(`📏 Distance to ${elephantKey}: ${distance.toFixed(2)}km`);
+
           // Check if elephant is within 5km
           if (distance <= 5) {
+            console.log(`🚨 PROXIMITY ALERT: ${elephantKey} is within 5km (${distance.toFixed(2)}km)`);
+
             // Create a mock livelocation object for compatibility with existing alert system
             const elephantWithLiveLocation = {
               ...elephant,
@@ -441,37 +473,76 @@ function startProximityMonitoring() {
               }
             };
             sendProximityAlert(elephantKey, elephantWithLiveLocation, distance);
+          } else {
+            console.log(`✅ ${elephantKey} is safe distance: ${distance.toFixed(2)}km`);
+          }
+        } else {
+          console.warn(`⚠️ No valid location data for ${elephantKey}`);
+        }
+      } else {
+        console.warn(`⚠️ No locations array for ${elephantKey}`);
+        // Check if it has old livelocation format for backward compatibility
+        if (elephant.livelocation) {
+          console.log(`🔄 Found old livelocation format for ${elephantKey}`);
+          const distance = calculateDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            parseFloat(elephant.livelocation.lat),
+            parseFloat(elephant.livelocation.lng)
+          );
+
+          console.log(`📏 Distance to ${elephantKey} (old format): ${distance.toFixed(2)}km`);
+
+          if (distance <= 5) {
+            console.log(`🚨 PROXIMITY ALERT: ${elephantKey} is within 5km (${distance.toFixed(2)}km) - old format`);
+            sendProximityAlert(elephantKey, elephant, distance);
           }
         }
       }
     });
+  }, (error) => {
+    console.error('❌ Error in proximity monitoring:', error);
   });
 
   // Log monitoring start
   database.ref(`public_subscribers/${subscriptionId}/monitoring_started`).set(firebase.database.ServerValue.TIMESTAMP);
+  console.log('✅ Proximity monitoring started successfully');
 }
 
 async function sendProximityAlert(elephantKey, elephantData, distance) {
+  console.log(`🚨 Sending proximity alert for ${elephantKey} at ${distance.toFixed(2)}km`);
+
   const alertKey = `${subscriptionId}_${elephantKey}_${Date.now()}`;
 
-  // Check if we've already sent an alert for this elephant recently (within 30 minutes)
-  const recentAlerts = await database.ref('proximity_alerts')
-    .orderByChild('subscriber_id')
-    .equalTo(subscriptionId)
-    .limitToLast(10)
-    .once('value');
+  try {
+    // Check if we've already sent an alert for this elephant recently (within 30 minutes)
+    console.log('🔍 Checking for recent alerts...');
 
-  const alerts = recentAlerts.val() || {};
-  const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+    const recentAlerts = await database.ref('proximity_alerts')
+      .orderByChild('subscriber_id')
+      .equalTo(subscriptionId)
+      .limitToLast(10)
+      .once('value');
 
-  const recentAlertForElephant = Object.values(alerts).find(alert =>
-    alert.elephant_id === elephantKey &&
-    alert.timestamp > thirtyMinutesAgo
-  );
+    const alerts = recentAlerts.val() || {};
+    const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
 
-  if (recentAlertForElephant) {
-    console.log(`Recent alert already sent for ${elephantKey}`);
-    return;
+    console.log('📋 Recent alerts:', alerts);
+
+    const recentAlertForElephant = Object.values(alerts).find(alert =>
+      alert.elephant_id === elephantKey &&
+      alert.timestamp > thirtyMinutesAgo
+    );
+
+    if (recentAlertForElephant) {
+      console.log(`⏰ Recent alert already sent for ${elephantKey} - skipping`);
+      return;
+    }
+
+    console.log('✅ No recent alerts found - proceeding with new alert');
+  } catch (error) {
+    console.error('❌ Error checking recent alerts:', error);
+    // Continue with alert anyway
   }
 
   // Create alert record
@@ -490,27 +561,38 @@ async function sendProximityAlert(elephantKey, elephantData, distance) {
 
   try {
     // Save alert to database
+    console.log('💾 Saving alert to database:', alertData);
     await database.ref('proximity_alerts/' + alertKey).set(alertData);
+    console.log('✅ Alert saved to database successfully');
 
     // Send web notification
     const title = distance < 2 ? '🚨 CRITICAL: Elephant Very Close!' : '⚠️ Elephant Alert';
     const body = `Elephant detected ${distance.toFixed(1)}km from your location. ${distance < 2 ? 'Seek safe shelter immediately!' : 'Exercise caution and avoid the area.'}`;
 
+    console.log('📢 Preparing notification:', { title, body, notificationPermission });
+
     if (notificationPermission) {
+      console.log('🔔 Sending web notification...');
       showNotification(title, body, '🐘', `elephant-${elephantKey}`);
 
       // Update notification status
       await database.ref(`proximity_alerts/${alertKey}/sent_notifications/web`).set(true);
+      console.log('✅ Notification status updated in database');
+    } else {
+      console.warn('⚠️ Cannot send notification - permission not granted');
+      // Show alert as fallback
+      alert(`${title}\n\n${body}`);
     }
 
     // For critical alerts (< 2km), enhance the notification
     if (distance < 2) {
-      console.log(`Critical proximity alert for elephant ${elephantKey} at ${distance.toFixed(1)}km`);
+      console.log(`🚨 CRITICAL proximity alert for elephant ${elephantKey} at ${distance.toFixed(1)}km`);
     }
 
-    console.log(`Alert sent for elephant ${elephantKey} at ${distance.toFixed(1)}km`);
+    console.log(`✅ Complete alert process finished for elephant ${elephantKey} at ${distance.toFixed(1)}km`);
   } catch (error) {
-    console.error('Error sending proximity alert:', error);
+    console.error('❌ Error sending proximity alert:', error);
+    console.error('Error details:', error);
   }
 }
 
@@ -784,5 +866,30 @@ window.TrunkLinkAlerts = {
       livelocation: { lat: userLocation.latitude, lng: userLocation.longitude }
     };
     sendProximityAlert(elephantKey, mockElephantData, distance);
+  },
+  // Test proximity monitoring manually
+  testProximityAlert: (distance = 3) => {
+    if (!userLocation || !subscriptionId) {
+      console.error('❌ Cannot test - user location or subscription missing');
+      return;
+    }
+    console.log('🧪 Testing proximity alert...');
+    const mockElephantData = {
+      livelocation: {
+        lat: userLocation.latitude + 0.01,
+        lng: userLocation.longitude + 0.01,
+        timestamp: new Date().toISOString()
+      }
+    };
+    sendProximityAlert('TEST_ELEPHANT', mockElephantData, distance);
+  },
+  // Check current monitoring status
+  getMonitoringStatus: () => {
+    return {
+      subscriptionId: subscriptionId,
+      userLocation: userLocation,
+      notificationPermission: notificationPermission,
+      isMonitoring: !!subscriptionId && !!userLocation
+    };
   }
 };
