@@ -9,9 +9,24 @@ const firebaseConfig = {
   appId: "1:554894296621:web:c22dacd39c4bafb2545aa4"
 };
 
-// Initialize Firebase
-const app = firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
+// Initialize Firebase with error handling
+let app, database;
+try {
+  app = firebase.initializeApp(firebaseConfig);
+  database = firebase.database();
+
+  // Test Firebase connection
+  database.ref('.info/connected').on('value', (snapshot) => {
+    if (snapshot.val() === true) {
+      console.log('Connected to Firebase');
+    } else {
+      console.log('Disconnected from Firebase');
+    }
+  });
+} catch (error) {
+  console.error('Firebase initialization failed:', error);
+  alert('Failed to initialize database connection. Please refresh the page and try again.');
+}
 
 // Global variables
 let userLocation = null;
@@ -213,13 +228,41 @@ async function requestNotificationPermission() {
 // Subscription Management
 async function subscribeToAlerts(formData) {
   try {
+    // Validate required data
+    if (!userLocation) {
+      throw new Error('Location access is required for subscription');
+    }
+
+    if (!formData.fullName || !formData.phoneNumber) {
+      throw new Error('Full name and phone number are required');
+    }
+
+    // Test Firebase connection first with better error handling
+    try {
+      // Check if we're on localhost vs production
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+      // Test connection with timeout for production environments
+      const connectionPromise = database.ref('.info/connected').once('value');
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Firebase connection timeout')), 10000);
+      });
+
+      await Promise.race([connectionPromise, timeoutPromise]);
+      console.log('Firebase connection test passed');
+    } catch (connectionError) {
+      console.error('Firebase connection failed:', connectionError);
+      throw new Error('Unable to connect to database. Please check your internet connection and try again.');
+    }
+
     subscriptionId = generateSubscriptionId();
+    console.log('Creating subscription with ID:', subscriptionId);
 
     const subscriptionData = {
       id: subscriptionId,
-      name: formData.fullName,
-      phone: formData.phoneNumber,
-      email: formData.email || null,
+      name: formData.fullName.trim(),
+      phone: formData.phoneNumber.trim(),
+      email: formData.email ? formData.email.trim() : null,
       location: userLocation,
       preferences: {
         webNotifications: formData.webNotifications,
@@ -234,8 +277,17 @@ async function subscribeToAlerts(formData) {
       last_location_update: firebase.database.ServerValue.TIMESTAMP
     };
 
-    // Save subscription to Firebase
-    await database.ref('public_subscribers/' + subscriptionId).set(subscriptionData);
+    console.log('Attempting to save subscription data:', subscriptionData);
+
+    // Save subscription to Firebase with timeout
+    const savePromise = database.ref('public_subscribers/' + subscriptionId).set(subscriptionData);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database write timeout - please try again')), 15000);
+    });
+
+    await Promise.race([savePromise, timeoutPromise]);
+
+    console.log('Subscription saved successfully');
 
     // Store subscription ID locally
     localStorage.setItem('trunklink_subscription_id', subscriptionId);
@@ -443,7 +495,30 @@ subscriptionForm.addEventListener('submit', async (e) => {
 
   } catch (error) {
     console.error('Subscription failed:', error);
-    alert('Subscription failed. Please try again.');
+
+    // Provide more specific error messages
+    let errorMessage = 'Subscription failed. Please try again.';
+
+    if (error.code === 'PERMISSION_DENIED') {
+      errorMessage = 'Access denied. Please check your internet connection and try again.';
+    } else if (error.code === 'NETWORK_ERROR' || error.message.includes('network')) {
+      errorMessage = 'Network error. Please check your internet connection and try again.';
+    } else if (error.message.includes('Firebase')) {
+      errorMessage = 'Database connection failed. Please try again later.';
+    } else if (error.message) {
+      errorMessage = `Subscription failed: ${error.message}`;
+    }
+
+    alert(errorMessage);
+
+    // Log detailed error for debugging
+    console.error('Detailed error info:', {
+      code: error.code,
+      message: error.message,
+      details: error,
+      userLocation: !!userLocation,
+      subscriptionId: subscriptionId
+    });
   } finally {
     // Reset loading state
     subscribeBtn.disabled = false;
@@ -472,12 +547,15 @@ manageSubscriptionBtn.addEventListener('click', () => {
 // Register Service Worker for background functionality
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    // Use relative path for better compatibility with different hosting environments
+    const swPath = './sw.js';
+    navigator.serviceWorker.register(swPath)
       .then((registration) => {
         console.log('Service Worker registered successfully:', registration.scope);
       })
       .catch((error) => {
         console.log('Service Worker registration failed:', error);
+        console.error('SW registration error details:', error);
       });
   });
 }

@@ -1,9 +1,13 @@
 // TrunkLink Service Worker for Background Notifications
-const CACHE_NAME = 'trunklink-v2';
+const CACHE_NAME = 'trunklink-v3';
 const urlsToCache = [
-  '/public-alerts.html',
-  '/public-alerts-script.js',
-  '/manifest.json'
+  './public-alerts.html',
+  './public-alerts-script.js',
+  './manifest.json',
+  './login.html',
+  './index.html',
+  './style.css',
+  './login-style.css'
 ];
 
 // Enhanced storage for persistent monitoring
