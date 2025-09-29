@@ -496,17 +496,32 @@ subscriptionForm.addEventListener('submit', async (e) => {
   } catch (error) {
     console.error('Subscription failed:', error);
 
-    // Provide more specific error messages
+    // Provide more specific error messages with Android-specific handling
     let errorMessage = 'Subscription failed. Please try again.';
 
+    // Check for Android Chrome specific issues
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isChrome = /Chrome/i.test(navigator.userAgent);
+
     if (error.code === 'PERMISSION_DENIED') {
-      errorMessage = 'Access denied. Please check your internet connection and try again.';
+      if (isAndroid) {
+        errorMessage = 'Database access denied. This is likely a Firebase security rules issue. Please contact support with error code: ANDROID_PERMISSION_DENIED';
+      } else {
+        errorMessage = 'Access denied. Please check your internet connection and try again.';
+      }
     } else if (error.code === 'NETWORK_ERROR' || error.message.includes('network')) {
       errorMessage = 'Network error. Please check your internet connection and try again.';
     } else if (error.message.includes('Firebase')) {
       errorMessage = 'Database connection failed. Please try again later.';
+    } else if (error.message.includes('permission') || error.message.includes('denied')) {
+      errorMessage = 'Database permission error. Please contact support if this persists.';
     } else if (error.message) {
       errorMessage = `Subscription failed: ${error.message}`;
+    }
+
+    // Add device info for debugging
+    if (isAndroid) {
+      errorMessage += ` (Android device detected - ${isChrome ? 'Chrome' : 'Other browser'})`;
     }
 
     alert(errorMessage);
@@ -560,8 +575,30 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Test Firebase write permissions
+async function testFirebaseRules() {
+  try {
+    const testRef = database.ref('public_subscribers/test_write_' + Date.now());
+    await testRef.set({
+      test: true,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+    await testRef.remove(); // Clean up test data
+    console.log('✅ Firebase write test passed');
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase write test failed:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      details: error
+    });
+    return false;
+  }
+}
+
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Check if user is already subscribed
   const existingSubscriptionId = localStorage.getItem('trunklink_subscription_id');
 
@@ -589,6 +626,17 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch((error) => {
         console.error('Error checking existing subscription:', error);
       });
+  }
+
+  // Test Firebase write permissions on page load (helpful for debugging)
+  if (database) {
+    setTimeout(() => {
+      testFirebaseRules().then(success => {
+        if (!success) {
+          console.warn('⚠️ Firebase write permissions may be restricted. Check database rules.');
+        }
+      });
+    }, 2000);
   }
 
   // Request notification permission on page load
