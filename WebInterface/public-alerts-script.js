@@ -165,18 +165,42 @@ function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
 
 // Location Management
 async function requestLocationPermission() {
+  console.log('🌍 Requesting location permission...');
+
   if (!navigator.geolocation) {
-    showLocationStatus('Geolocation is not supported by this browser', 'error');
+    const errorMsg = 'Geolocation is not supported by this browser';
+    console.error('❌', errorMsg);
+    showLocationStatus(errorMsg, 'error');
     return false;
   }
 
+  // Show loading status
+  showLocationStatus('Requesting location access...', 'info');
+
+  if (requestLocationBtn) {
+    requestLocationBtn.textContent = 'Getting Location...';
+    requestLocationBtn.disabled = true;
+  }
+
   try {
+    console.log('📍 Calling getCurrentPosition...');
+
     const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000 // 5 minutes
-      });
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('✅ Location obtained:', position.coords);
+          resolve(position);
+        },
+        (error) => {
+          console.error('❌ Location error:', error);
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000, // Increased timeout
+          maximumAge: 60000 // 1 minute cache
+        }
+      );
     });
 
     userLocation = {
@@ -186,36 +210,64 @@ async function requestLocationPermission() {
       timestamp: Date.now()
     };
 
+    console.log('📍 User location set:', userLocation);
+
     // Start watching location changes
     startLocationWatching();
 
-    showLocationStatus(
-      `Location access granted (±${Math.round(position.coords.accuracy)}m accuracy)`,
-      'success'
-    );
+    const successMsg = `Location access granted (±${Math.round(position.coords.accuracy)}m accuracy)`;
+    console.log('✅', successMsg);
+    showLocationStatus(successMsg, 'success');
 
-    requestLocationBtn.textContent = '✓ Location Access Granted';
-    requestLocationBtn.disabled = true;
-    requestLocationBtn.classList.add('bg-green-600', 'cursor-not-allowed');
-    requestLocationBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+    if (requestLocationBtn) {
+      requestLocationBtn.textContent = '✓ Location Access Granted';
+      requestLocationBtn.disabled = true;
+      requestLocationBtn.classList.add('bg-green-600', 'cursor-not-allowed');
+      requestLocationBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+    }
 
     return true;
   } catch (error) {
-    let errorMessage = 'Location access denied';
+    console.error('❌ Location permission error:', error);
 
-    switch(error.code) {
-      case error.PERMISSION_DENIED:
-        errorMessage = 'Location access was denied. Please enable location services.';
-        break;
-      case error.POSITION_UNAVAILABLE:
-        errorMessage = 'Location information is unavailable.';
-        break;
-      case error.TIMEOUT:
-        errorMessage = 'Location request timed out. Please try again.';
-        break;
+    let errorMessage = 'Location access failed';
+
+    if (error.code) {
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage = 'Location access was denied. Please enable location services in your browser settings.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage = 'Location information is unavailable. Please check if GPS/location services are enabled.';
+          break;
+        case error.TIMEOUT:
+          errorMessage = 'Location request timed out. Please try again.';
+          break;
+        default:
+          errorMessage = `Location error: ${error.message || 'Unknown error'}`;
+      }
+    } else {
+      errorMessage = `Location error: ${error.message || error}`;
     }
 
+    console.error('❌ Location error details:', errorMessage);
     showLocationStatus(errorMessage, 'error');
+
+    // Reset button
+    if (requestLocationBtn) {
+      requestLocationBtn.textContent = 'Grant Location Access';
+      requestLocationBtn.disabled = false;
+      requestLocationBtn.classList.remove('bg-green-600', 'cursor-not-allowed');
+      requestLocationBtn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+    }
+
+    // Show additional help for common issues
+    if (error.code === 1) { // PERMISSION_DENIED
+      setTimeout(() => {
+        alert('Location permission was denied. To enable:\n\n1. Click the location icon in your browser address bar\n2. Select "Allow" for location access\n3. Refresh the page and try again');
+      }, 500);
+    }
+
     return false;
   }
 }
@@ -750,6 +802,12 @@ subscriptionForm.addEventListener('submit', async (e) => {
       );
     }, 2000);
 
+    // Start automatic push notifications every 20 seconds
+    setTimeout(() => {
+      console.log('🚀 Starting automatic push notifications...');
+      startAutoPushNotifications();
+    }, 5000); // Start 5 seconds after subscription
+
   } catch (error) {
     console.error('Subscription failed:', error);
 
@@ -799,11 +857,56 @@ subscriptionForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Event Listeners
-requestLocationBtn.addEventListener('click', requestLocationPermission);
+// Debug function to check DOM elements
+function checkDOMElements() {
+  const elements = {
+    subscriptionForm: document.getElementById('subscriptionForm'),
+    requestLocationBtn: document.getElementById('requestLocationBtn'),
+    locationStatus: document.getElementById('locationStatus'),
+    subscribeBtn: document.getElementById('subscribeBtn'),
+    testNotificationBtn: document.getElementById('testNotificationBtn')
+  };
 
-testNotificationBtn.addEventListener('click', async () => {
-  console.log('🧪 Test system notification button clicked');
+  console.log('🔍 DOM Elements Check:', elements);
+
+  Object.entries(elements).forEach(([name, element]) => {
+    if (!element) {
+      console.error(`❌ Missing DOM element: ${name}`);
+    } else {
+      console.log(`✅ Found DOM element: ${name}`);
+    }
+  });
+
+  return elements;
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('📄 DOM Content Loaded - checking elements...');
+  checkDOMElements();
+});
+
+// Add event listener with null check
+if (requestLocationBtn) {
+  requestLocationBtn.addEventListener('click', requestLocationPermission);
+  console.log('✅ Location button event listener added');
+} else {
+  console.error('❌ requestLocationBtn not found - will retry after DOM load');
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('requestLocationBtn');
+    if (btn) {
+      btn.addEventListener('click', requestLocationPermission);
+      console.log('✅ Location button event listener added after DOM load');
+    } else {
+      console.error('❌ requestLocationBtn still not found after DOM load');
+    }
+  });
+}
+
+// Add test notification event listener with null check
+if (testNotificationBtn) {
+  testNotificationBtn.addEventListener('click', async () => {
+    console.log('🧪 Test system notification button clicked');
 
   // Check notification permission first
   if (Notification.permission !== 'granted') {
@@ -845,7 +948,42 @@ testNotificationBtn.addEventListener('click', async () => {
     console.error('❌ Test notification failed:', error);
     alert('Test notification failed. Please check browser console for details.');
   }
-});
+  });
+} else {
+  console.error('❌ testNotificationBtn not found');
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('testNotificationBtn');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        // Same test notification logic here...
+        console.log('🧪 Test system notification button clicked (DOM loaded)');
+
+        if (Notification.permission !== 'granted') {
+          const granted = await requestNotificationPermission();
+          if (!granted) {
+            alert('Please enable notifications in your browser settings to receive alerts.');
+            return;
+          }
+        }
+
+        try {
+          await triggerSystemNotification({
+            title: '🚨 Elephant Within Perimeter (System Test)',
+            body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+            elephantId: 'test-elephant',
+            distance: 2.5,
+            userLocation: userLocation
+          });
+
+          alert('System notification test sent!');
+        } catch (error) {
+          console.error('❌ Test notification failed:', error);
+          alert('Test notification failed. Please check browser console for details.');
+        }
+      });
+    }
+  });
+}
 
 manageSubscriptionBtn.addEventListener('click', () => {
   // This would open a subscription management interface
@@ -910,6 +1048,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (userLocation) {
             startProximityMonitoring();
           }
+
+          // Start automatic push notifications for existing subscription
+          setTimeout(() => {
+            console.log('🚀 Starting automatic push notifications for existing subscription...');
+            startAutoPushNotifications();
+          }, 3000);
         } else {
           // Subscription no longer exists, clear local storage
           localStorage.removeItem('trunklink_subscription_id');
@@ -977,6 +1121,83 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Auto push notification every 20 seconds
+let pushIntervalId = null;
+
+function startAutoPushNotifications() {
+  console.log('🚀 Starting auto push notifications every 20 seconds...');
+
+  if (pushIntervalId) {
+    clearInterval(pushIntervalId);
+  }
+
+  // Show status message
+  if (successMessage && !successMessage.classList.contains('hidden')) {
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'auto-notification-status';
+    statusDiv.className = 'mt-4 p-3 bg-blue-100 border border-blue-400 rounded-lg';
+    statusDiv.innerHTML = `
+      <div class="flex items-center space-x-2">
+        <div class="animate-pulse h-2 w-2 bg-blue-500 rounded-full"></div>
+        <span class="text-blue-800 text-sm font-medium">Auto notifications active - sending every 20 seconds</span>
+      </div>
+    `;
+    successMessage.appendChild(statusDiv);
+  }
+
+  pushIntervalId = setInterval(async () => {
+    console.log('📱 Sending automatic push notification...');
+
+    try {
+      await triggerSystemNotification({
+        title: '🚨 Elephant Within Perimeter',
+        body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+        elephantId: 'auto-alert-' + Date.now(),
+        distance: Math.random() * 5, // Random distance 0-5km
+        userLocation: userLocation
+      });
+
+      console.log('✅ Auto push notification sent');
+
+      // Update status if visible
+      const statusDiv = document.getElementById('auto-notification-status');
+      if (statusDiv) {
+        const now = new Date().toLocaleTimeString();
+        statusDiv.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="animate-pulse h-2 w-2 bg-green-500 rounded-full"></div>
+            <span class="text-green-800 text-sm font-medium">Last notification sent: ${now}</span>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('❌ Auto push notification failed:', error);
+
+      // Show error status
+      const statusDiv = document.getElementById('auto-notification-status');
+      if (statusDiv) {
+        statusDiv.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="h-2 w-2 bg-red-500 rounded-full"></div>
+            <span class="text-red-800 text-sm font-medium">Notification failed - check permissions</span>
+          </div>
+        `;
+      }
+    }
+  }, 20000); // 20 seconds
+
+  console.log('✅ Auto push notifications started');
+  return pushIntervalId;
+}
+
+function stopAutoPushNotifications() {
+  if (pushIntervalId) {
+    clearInterval(pushIntervalId);
+    pushIntervalId = null;
+    console.log('🛑 Auto push notifications stopped');
+  }
+}
+
 // Export functions for testing
 window.TrunkLinkAlerts = {
   calculateDistance,
@@ -987,6 +1208,8 @@ window.TrunkLinkAlerts = {
     };
     sendProximityAlert(elephantKey, mockElephantData, distance);
   },
+  startAutoPushNotifications,
+  stopAutoPushNotifications,
   // Debug notification system
   debugNotifications: () => {
     const debug = {
