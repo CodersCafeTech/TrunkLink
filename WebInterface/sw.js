@@ -83,21 +83,25 @@ function stopContinuousMonitoring() {
 
 // Enhanced push notification handling for system-level notifications
 self.addEventListener('push', (event) => {
-  console.log('🔔 Push notification received in service worker');
+  console.log('🔔 [SW] Push notification received in service worker');
+  console.log('🔔 [SW] Event data:', event.data ? event.data.text() : 'No data');
 
   let notificationData;
 
   if (event.data) {
     try {
       notificationData = event.data.json();
-      console.log('📊 Push data:', notificationData);
+      console.log('📊 [SW] Push data parsed:', notificationData);
     } catch (e) {
+      console.log('⚠️ [SW] Failed to parse push data, using default');
       notificationData = {
         title: '🚨 Elephant Within Perimeter',
         body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!'
       };
     }
   } else {
+    console.log('⚠️ [SW] No push data, using default');
+
     notificationData = {
       title: '🚨 Elephant Within Perimeter',
       body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!'

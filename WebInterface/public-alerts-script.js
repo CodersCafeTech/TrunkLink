@@ -443,8 +443,8 @@ async function requestNotificationPermission() {
 // VAPID public key from working Push system
 const VAPID_PUBLIC_KEY = 'BFtX42XNx31EmwuVegKXPhX6bW8AiVOEACYRmB6Lz1-uAAee7IIF5YXX8e7U4fNzYe6x2GNkP8YYPq9sdyXVu10';
 
-// Backend API configuration - using working Push system
-const BACKEND_URL = 'https://push-ej51.onrender.com'; // Your working Push backend
+// Backend API configuration - TrunkLink backend with proximity monitoring
+const BACKEND_URL = 'https://trunklink-backend.onrender.com';
 
 // Subscribe to push notifications
 async function subscribeToPush() {
@@ -513,7 +513,11 @@ async function sendSubscriptionToBackend(subscription, userInfo, location) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(subscription)
+      body: JSON.stringify({
+        subscription: subscription,
+        userInfo: userInfo,
+        location: location
+      })
     });
 
     if (!response.ok) {
