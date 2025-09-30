@@ -84,13 +84,17 @@ function initializeUserDisplay() {
     `;
   }
 
-  // Log dashboard access
-  database.ref('dashboard_access').push({
-    ranger_id: user.id,
-    ranger_name: user.name,
-    timestamp: firebase.database.ServerValue.TIMESTAMP,
-    page: 'dashboard'
-  });
+  // Log dashboard access (optional - ignore errors)
+  try {
+    database.ref('dashboard_access').push({
+      ranger_id: user.id,
+      ranger_name: user.name,
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+      page: 'dashboard'
+    }).catch(err => console.warn('Could not log dashboard access:', err));
+  } catch (error) {
+    console.warn('Could not log dashboard access:', error);
+  }
 }
 
 // Enhanced logout function
@@ -279,17 +283,21 @@ function onMapClick(e) {
   // Add a popup to the marker with the clicked location
   liveMarker.bindPopup(`<b>Clicked Location</b><br>Latitude: ${lat.toFixed(6)}<br>Longitude: ${lng.toFixed(6)}`).openPopup();
 
-  // Publish marker to Firebase Realtime Database
-  database.ref('markers').set({
-    lat: lat,
-    lng: lng
-  })
-  .then(() => {
-    console.log('Marker saved to Firebase Realtime Database!');
-  })
-  .catch((error) => {
-    console.error('Error saving marker: ', error);
-  });
+  // Publish marker to Firebase Realtime Database (optional)
+  try {
+    database.ref('markers').set({
+      lat: lat,
+      lng: lng
+    })
+    .then(() => {
+      console.log('Marker saved to Firebase Realtime Database!');
+    })
+    .catch((error) => {
+      console.warn('Could not save marker:', error);
+    });
+  } catch (error) {
+    console.warn('Could not save marker:', error);
+  }
 }
 
 function fetchElephants() {
@@ -324,6 +332,9 @@ function fetchElephants() {
           select.value = firstElephant;
           console.log(`Auto-loading first elephant: ${firstElephant}`);
           loadLiveLocation(firstElephant);
+
+          // Start real-time monitoring for first elephant
+          startRealTimeLocationMonitoring(firstElephant);
         }
       } else {
         console.error('No elephants found in Firebase.');
@@ -417,34 +428,8 @@ function loadLiveLocation(elephantKey) {
           showRunningAlert(elephantKey, { lat, lng }, latestLocation.timestamp);
         }
 
-        // Update map view to the live location
-        map.setView([lat, lng], 13);
-
-        // Remove existing markers
-        map.eachLayer((layer) => {
-          if (layer instanceof L.Marker) {
-            map.removeLayer(layer);
-          }
-        });
-
-        // Add a marker with different color based on alert type
-        const markerColor = alertType === 'running_detected'
-          ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png'
-          : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png';
-
-        const marker = L.marker([lat, lng], {
-          icon: L.icon({
-            iconUrl: markerColor,
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowSize: [41, 41]
-          })
-        }).addTo(map);
-
-        const statusEmoji = alertType === 'running_detected' ? '🏃 RUNNING' : '🚶 Normal';
-        marker.bindPopup(`<b>${elephantKey.toUpperCase()}</b><br>Status: ${statusEmoji}<br>Lat: ${lat.toFixed(6)} <br> Lon: ${lng.toFixed(6)}<br>Updated: ${new Date(latestLocation.timestamp).toLocaleString()}`).openPopup();
+        // Use the dynamic marker update function (avoids duplicate markers)
+        updateElephantMarker(elephantKey, lat, lng, alertType, latestLocation.timestamp);
       } else {
         console.error(`❌ No valid location found for ${elephantKey}`);
         console.log('Available data:', { locations: elephant.locations, livelocation: elephant.livelocation });
@@ -453,6 +438,75 @@ function loadLiveLocation(elephantKey) {
     .catch((error) => {
       console.error('❌ Error loading live location for elephant:', error);
     });
+}
+
+// Store current marker for real-time updates
+let currentElephantMarker = null;
+let locationListener = null; // Store the Firebase listener reference
+
+// Real-time location monitoring for selected elephant
+function startRealTimeLocationMonitoring(elephantKey) {
+  console.log(`🔄 Starting real-time monitoring for ${elephantKey}`);
+
+  // Remove previous listener if exists
+  if (locationListener) {
+    database.ref(`elephants/${elephantKey}/locations`).off('value', locationListener);
+  }
+
+  // Listen for location updates
+  locationListener = database.ref(`elephants/${elephantKey}/locations`).on('value', (snapshot) => {
+    const locations = snapshot.val();
+    if (!locations) return;
+
+    const latestLocation = getLatestLocation(locations);
+    if (!latestLocation || !latestLocation.latitude || !latestLocation.longitude) return;
+
+    const lat = parseFloat(latestLocation.latitude);
+    const lng = parseFloat(latestLocation.longitude);
+    const alertType = latestLocation.alert_type || 'routine_update';
+
+    console.log(`📍 Real-time update: ${elephantKey} at ${lat}, ${lng}, alert_type: ${alertType}`);
+
+    // Update marker dynamically
+    updateElephantMarker(elephantKey, lat, lng, alertType, latestLocation.timestamp);
+
+    // Check for running alert
+    if (alertType === 'running_detected') {
+      console.log(`🏃 Running detected in real-time for ${elephantKey}!`);
+      showRunningAlert(elephantKey, { lat, lng }, latestLocation.timestamp);
+    }
+  });
+}
+
+// Update elephant marker dynamically
+function updateElephantMarker(elephantKey, lat, lng, alertType, timestamp) {
+  // Remove old marker
+  if (currentElephantMarker) {
+    map.removeLayer(currentElephantMarker);
+  }
+
+  // Determine marker color based on alert type
+  const markerColor = alertType === 'running_detected'
+    ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png'
+    : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png';
+
+  // Create new marker
+  currentElephantMarker = L.marker([lat, lng], {
+    icon: L.icon({
+      iconUrl: markerColor,
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    })
+  }).addTo(map);
+
+  const statusEmoji = alertType === 'running_detected' ? '🏃 RUNNING' : '🚶 Normal';
+  currentElephantMarker.bindPopup(`<b>${elephantKey.toUpperCase()}</b><br>Status: ${statusEmoji}<br>Lat: ${lat.toFixed(6)} <br> Lon: ${lng.toFixed(6)}<br>Updated: ${new Date(timestamp).toLocaleString()}`).openPopup();
+
+  // Update map view smoothly
+  map.setView([lat, lng], map.getZoom());
 }
 
 // Event listener for when the user selects an elephant
@@ -466,6 +520,9 @@ document.getElementById('elephantSelect').addEventListener('change', function() 
     }
     // Load live location for the selected elephant
     loadLiveLocation(selectedElephant);
+
+    // Start real-time monitoring for this elephant
+    startRealTimeLocationMonitoring(selectedElephant);
   }
 });
 
@@ -478,18 +535,32 @@ function drawSpline() {
   const selectedElephant = document.getElementById('elephantSelect').value;
   const locationRef = database.ref('elephants/' + selectedElephant + '/locations');
   locationRef.once('value', (snapshot) => {
-    console.log(snapshot.val());
+    console.log('📊 Location history data:', snapshot.val());
     const locations = [];
+
     snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val();
-      if (data.latitude && data.longitude) {
+      let data = childSnapshot.val();
+
+      // Check if data is nested in uplink_message.decoded_payload
+      if (data.uplink_message && data.uplink_message.decoded_payload) {
+        data = data.uplink_message.decoded_payload;
+      }
+
+      // Handle both lat/lng and latitude/longitude formats
+      const lat = data.latitude || data.lat;
+      const lng = data.longitude || data.lng;
+      const timestamp = data.timestamp;
+
+      if (lat && lng && timestamp) {
         locations.push({
-          lat: data.latitude,
-          lng: data.longitude,
-          timestamp: data.timestamp
+          lat: parseFloat(typeof lat === 'string' ? lat.replace(/"/g, '') : lat),
+          lng: parseFloat(typeof lng === 'string' ? lng.replace(/"/g, '') : lng),
+          timestamp: timestamp
         });
       }
     });
+
+    console.log('📍 Processed locations for history:', locations);
 
     // Sort locations by timestamp
     locations.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -506,6 +577,17 @@ function drawSpline() {
         ],
         { color: 'blue', weight: 3 }
       ).addTo(map);
+
+      // Fit map to show all locations
+      map.fitBounds(coordinates);
+
+      console.log(`✅ Location history drawn: ${coordinates.length} points`);
+    } else if (coordinates.length === 1) {
+      console.log('⚠️ Only one location found - need at least 2 points for history');
+      alert('Only one location found. Need at least 2 locations to show history.');
+    } else {
+      console.log('❌ No locations found for history');
+      alert('No location history found for this elephant.');
     }
   });
 }
@@ -573,13 +655,17 @@ function showRunningAlert(elephantId, location, timestamp) {
   // Send push notification to rangers
   sendRunningAlertNotification(elephantId, location);
 
-  // Log to Firebase
-  database.ref('running_alerts').push({
-    elephant_id: elephantId,
-    location: location,
-    timestamp: firebase.database.ServerValue.TIMESTAMP,
-    detected_at: timestamp
-  });
+  // Log to Firebase (optional - ignore errors)
+  try {
+    database.ref('running_alerts').push({
+      elephant_id: elephantId,
+      location: location,
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+      detected_at: timestamp
+    }).catch(err => console.warn('Could not log running alert:', err));
+  } catch (error) {
+    console.warn('Could not log running alert:', error);
+  }
 }
 
 // Send push notification for running detection
@@ -750,15 +836,19 @@ async function sendGeofenceAlert(elephantId, alertType, geofenceData, elephantLo
     if (response.ok) {
       console.log(`✅ Geofence alert sent for ${elephantId}`);
 
-      // Log alert to Firebase
-      database.ref('geofence_alerts').push({
-        elephant_id: elephantId,
-        alert_type: alertType,
-        location: elephantLocation,
-        geofence_created_by: geofenceData.created_by,
-        ranger_id: geofenceData.ranger_id,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-      });
+      // Log alert to Firebase (optional - ignore errors)
+      try {
+        database.ref('geofence_alerts').push({
+          elephant_id: elephantId,
+          alert_type: alertType,
+          location: elephantLocation,
+          geofence_created_by: geofenceData.created_by,
+          ranger_id: geofenceData.ranger_id,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        }).catch(err => console.warn('Could not log geofence alert:', err));
+      } catch (error) {
+        console.warn('Could not log geofence alert:', error);
+      }
     } else {
       console.error('❌ Failed to send geofence alert');
     }
