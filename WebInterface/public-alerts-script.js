@@ -550,24 +550,8 @@ async function subscribeToAlerts(formData) {
     // Subscribe to Push system
     await sendSubscriptionToBackend(pushSubscription, userInfo, userLocation);
 
-    // Also store in Firebase for elephant monitoring
+    // Generate subscription ID for local storage only (no Firebase write needed)
     subscriptionId = 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-    const subscriptionData = {
-      id: subscriptionId,
-      name: userInfo.name,
-      phone: userInfo.phone || '',
-      email: userInfo.email || '',
-      location: userLocation || null,
-      pushSubscription: pushSubscription,
-      status: 'active',
-      subscribed_at: firebase.database.ServerValue.TIMESTAMP,
-      last_updated: firebase.database.ServerValue.TIMESTAMP,
-      user_agent: navigator.userAgent,
-      ip_address: 'web'
-    };
-
-    await database.ref('public_subscribers/' + subscriptionId).set(subscriptionData);
 
     console.log('Subscription created with backend:', subscriptionId);
 
@@ -1031,33 +1015,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (existingSubscriptionId) {
     subscriptionId = existingSubscriptionId;
 
-    // Verify subscription still exists in database
-    database.ref('public_subscribers/' + subscriptionId).once('value')
-      .then((snapshot) => {
-        if (snapshot.exists()) {
-          // User is already subscribed
-          if (subscriptionForm) subscriptionForm.style.display = 'none';
-          if (successMessage) successMessage.classList.remove('hidden');
+    // User is already subscribed (no Firebase check needed)
+    if (subscriptionForm) subscriptionForm.style.display = 'none';
+    if (successMessage) successMessage.classList.remove('hidden');
 
-          // Start monitoring
-          if (userLocation) {
-            startProximityMonitoring();
-          }
+    // Start monitoring
+    if (userLocation) {
+      startProximityMonitoring();
+    }
 
-          // Start automatic push notifications for existing subscription
-          setTimeout(() => {
-            console.log('🚀 Starting automatic push notifications for existing subscription...');
-            startAutoPushNotifications();
-          }, 3000);
-        } else {
-          // Subscription no longer exists, clear local storage
-          localStorage.removeItem('trunklink_subscription_id');
-          subscriptionId = null;
-        }
-      })
-      .catch((error) => {
-        console.error('Error checking existing subscription:', error);
-      });
+    // Start automatic push notifications for existing subscription
+    setTimeout(() => {
+      console.log('🚀 Starting automatic push notifications for existing subscription...');
+      startAutoPushNotifications();
+    }, 3000);
   }
 
   // Test Firebase write permissions on page load (helpful for debugging)
