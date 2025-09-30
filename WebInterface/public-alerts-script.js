@@ -518,6 +518,7 @@ function urlBase64ToUint8Array(base64String) {
 
 // Subscription Management
 async function subscribeToAlerts(formData) {
+  console.log('🚀 Starting subscription process...');
   try {
     // Validate required data
     // Location check disabled for testing
@@ -525,20 +526,25 @@ async function subscribeToAlerts(formData) {
     //   throw new Error('Location access is required for subscription');
     // }
 
+    console.log('📝 Validating form data...', formData);
     if (!formData.fullName || !formData.phoneNumber) {
       throw new Error('Full name and phone number are required');
     }
 
     // Check if service worker is supported (required for push notifications)
+    console.log('🔍 Checking service worker support...');
     if (!('serviceWorker' in navigator)) {
       const isSecure = window.isSecureContext;
       const protocol = window.location.protocol;
+      console.error('❌ Service Worker not supported:', { isSecure, protocol });
       alert(`Push notifications require HTTPS.\n\nCurrent: ${protocol}\nSecure Context: ${isSecure}\n\nTo fix:\n• Access via HTTPS\n• Use ngrok or similar tool\n• Deploy to a hosting service with SSL`);
       throw new Error('Service Worker requires HTTPS');
     }
 
     // Subscribe to push notifications
+    console.log('📱 Subscribing to push notifications...');
     const pushSubscription = await subscribeToPush();
+    console.log('✅ Push subscription successful');
 
     // Send subscription to backend
     const userInfo = {
