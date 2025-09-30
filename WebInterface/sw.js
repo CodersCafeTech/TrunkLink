@@ -53,51 +53,84 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Enhanced push notification handling
+// Enhanced push notification handling for system-level notifications
 self.addEventListener('push', (event) => {
+  console.log('🔔 Push notification received in service worker');
+
   let notificationData;
 
   if (event.data) {
     try {
       notificationData = event.data.json();
+      console.log('📊 Push data:', notificationData);
     } catch (e) {
-      notificationData = { title: event.data.text() };
+      notificationData = {
+        title: '🚨 Elephant Within Perimeter',
+        body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!'
+      };
     }
   } else {
-    notificationData = { title: 'TrunkLink Alert' };
+    notificationData = {
+      title: '🚨 Elephant Within Perimeter',
+      body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!'
+    };
   }
 
+  // Create system-level notification options for Android
   const options = {
-    body: notificationData.body || 'Elephant proximity alert',
-    icon: '/icons/elephant-icon-192.png',
-    badge: '/icons/elephant-badge-72.png',
-    vibrate: [300, 200, 300, 200, 300],
-    requireInteraction: true,
+    body: notificationData.body || 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+    icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="32" cy="32" r="30" fill="%23ff4444"/%3E%3Ctext x="32" y="38" text-anchor="middle" fill="white" font-size="32"%3E🐘%3C/text%3E%3C/svg%3E',
+    badge: 'data:image/svg+xml,%3Csvg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="48" cy="48" r="48" fill="%23ff4444"/%3E%3Ctext x="48" y="58" text-anchor="middle" fill="white" font-size="48"%3E⚠️%3C/text%3E%3C/svg%3E',
+    vibrate: [1000, 500, 1000, 500, 1000], // Strong vibration pattern
+    requireInteraction: true, // Keeps notification until user interacts
     persistent: true,
-    tag: notificationData.tag || 'elephant-alert',
-    renotify: true,
+    silent: false, // Ensure sound plays
+    tag: 'elephant-critical-alert', // Prevents duplicate notifications
+    renotify: true, // Show even if same tag exists
+    timestamp: Date.now(),
+    image: 'data:image/svg+xml,%3Csvg viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg"%3E%3Crect width="300" height="150" fill="%23ff4444"/%3E%3Ctext x="150" y="75" text-anchor="middle" fill="white" font-size="48" font-weight="bold"%3E🚨 DANGER 🚨%3C/text%3E%3C/svg%3E',
     actions: [
       {
         action: 'view',
         title: '📍 View Location',
-        icon: '/icons/view-icon.png'
+        icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="%2316a34a"/%3E%3C/svg%3E'
       },
       {
-        action: 'dismiss',
-        title: '✖️ Dismiss',
-        icon: '/icons/dismiss-icon.png'
+        action: 'safe',
+        title: '✅ I Am Safe',
+        icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="%2316a34a"/%3E%3C/svg%3E'
       }
     ],
     data: {
-      elephantId: notificationData.elephantId,
-      distance: notificationData.distance,
+      elephantId: notificationData.elephantId || 'unknown',
+      distance: notificationData.distance || 0,
       timestamp: Date.now(),
-      userLocation: notificationData.userLocation
+      userLocation: notificationData.userLocation,
+      url: '/public-alerts.html',
+      critical: true
     }
   };
 
+  console.log('📱 Showing system notification with options:', options);
+
   event.waitUntil(
     self.registration.showNotification(notificationData.title, options)
+      .then(() => {
+        console.log('✅ System notification displayed successfully');
+
+        // Keep service worker alive and send message to client if available
+        return self.clients.matchAll().then(clients => {
+          clients.forEach(client => {
+            client.postMessage({
+              type: 'NOTIFICATION_SHOWN',
+              data: notificationData
+            });
+          });
+        });
+      })
+      .catch(error => {
+        console.error('❌ Failed to show system notification:', error);
+      })
   );
 });
 

@@ -251,6 +251,80 @@ function startLocationWatching() {
   );
 }
 
+// System-level notification trigger
+async function triggerSystemNotification(data) {
+  console.log('🚀 Triggering system-level notification:', data);
+
+  try {
+    // Check if service worker is available
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      console.log('📡 Sending notification via service worker...');
+
+      // Send message to service worker to trigger notification
+      const channel = new MessageChannel();
+
+      return new Promise((resolve, reject) => {
+        channel.port1.onmessage = (event) => {
+          if (event.data.success) {
+            console.log('✅ System notification triggered successfully');
+            resolve(true);
+          } else {
+            console.error('❌ System notification failed:', event.data.error);
+            reject(new Error(event.data.error));
+          }
+        };
+
+        // Use the service worker registration to show notification directly
+        navigator.serviceWorker.ready.then(registration => {
+          return registration.showNotification(data.title, {
+            body: data.body,
+            icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="32" cy="32" r="30" fill="%23ff4444"/%3E%3Ctext x="32" y="38" text-anchor="middle" fill="white" font-size="32"%3E🐘%3C/text%3E%3C/svg%3E',
+            badge: 'data:image/svg+xml,%3Csvg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="48" cy="48" r="48" fill="%23ff4444"/%3E%3Ctext x="48" y="58" text-anchor="middle" fill="white" font-size="48"%3E⚠️%3C/text%3E%3C/svg%3E',
+            vibrate: [1000, 500, 1000, 500, 1000],
+            requireInteraction: true,
+            persistent: true,
+            silent: false,
+            tag: 'elephant-critical-alert',
+            renotify: true,
+            timestamp: Date.now(),
+            actions: [
+              {
+                action: 'view',
+                title: '📍 View Location'
+              },
+              {
+                action: 'safe',
+                title: '✅ I Am Safe'
+              }
+            ],
+            data: {
+              elephantId: data.elephantId,
+              distance: data.distance,
+              timestamp: Date.now(),
+              userLocation: data.userLocation,
+              critical: true
+            }
+          });
+        }).then(() => {
+          console.log('✅ System notification shown via service worker registration');
+          resolve(true);
+        }).catch(error => {
+          console.error('❌ Failed to show system notification:', error);
+          reject(error);
+        });
+      });
+    } else {
+      console.warn('⚠️ Service worker not available, using fallback notification');
+      // Fallback to regular notification
+      showNotification(data.title, data.body, '🐘', 'elephant-system-fallback');
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ Error triggering system notification:', error);
+    throw error;
+  }
+}
+
 // Notification Management
 async function requestNotificationPermission() {
   console.log('🔔 Requesting notification permission...');
@@ -273,14 +347,26 @@ async function requestNotificationPermission() {
 
       if (permission === 'granted') {
         console.log('✅ Notification permission granted');
-        // Test notification immediately on permission grant
-        setTimeout(() => {
-          showNotification(
-            '🎉 Notifications Enabled',
-            'You will now receive elephant proximity alerts!',
-            '🔔',
-            'permission-granted'
-          );
+
+        // Test system notification immediately on permission grant
+        setTimeout(async () => {
+          try {
+            await triggerSystemNotification({
+              title: '🎉 System Notifications Enabled',
+              body: 'You will now receive elephant alerts even when the app is closed!',
+              elephantId: 'test',
+              distance: 0,
+              userLocation: userLocation
+            });
+          } catch (error) {
+            console.warn('Test system notification failed, using fallback');
+            showNotification(
+              '🎉 Notifications Enabled',
+              'You will now receive elephant proximity alerts!',
+              '🔔',
+              'permission-granted'
+            );
+          }
         }, 500);
       } else {
         console.warn('❌ Notification permission denied');
@@ -571,18 +657,30 @@ async function sendProximityAlert(elephantKey, elephantData, distance) {
     await database.ref('proximity_alerts/' + alertKey).set(alertData);
     console.log('✅ Alert saved to database successfully');
 
-    // Send web notification with your requested message
+    // Send system-level notification with your requested message
     const title = '🚨 Elephant Within Perimeter';
     const body = 'Elephant Within Perimeter. Seek Shelter and Stay Safe!';
 
-    console.log('📢 Preparing notification:', { title, body, notificationPermission });
+    console.log('📢 Preparing system-level notification:', { title, body, notificationPermission });
 
     if (notificationPermission) {
-      console.log('🔔 Sending web notification...');
+      console.log('🔔 Sending system-level notification...');
+
+      // Send both web notification and system notification
       showNotification(title, body, '🐘', `elephant-${elephantKey}`);
+
+      // Trigger system-level notification via service worker
+      await triggerSystemNotification({
+        title: title,
+        body: body,
+        elephantId: elephantKey,
+        distance: distance,
+        userLocation: userLocation
+      });
 
       // Update notification status
       await database.ref(`proximity_alerts/${alertKey}/sent_notifications/web`).set(true);
+      await database.ref(`proximity_alerts/${alertKey}/sent_notifications/system`).set(true);
       console.log('✅ Notification status updated in database');
     } else {
       console.warn('⚠️ Cannot send notification - permission not granted');
@@ -705,7 +803,7 @@ subscriptionForm.addEventListener('submit', async (e) => {
 requestLocationBtn.addEventListener('click', requestLocationPermission);
 
 testNotificationBtn.addEventListener('click', async () => {
-  console.log('🧪 Test notification button clicked');
+  console.log('🧪 Test system notification button clicked');
 
   // Check notification permission first
   if (Notification.permission !== 'granted') {
@@ -717,21 +815,36 @@ testNotificationBtn.addEventListener('click', async () => {
     }
   }
 
-  console.log('🔔 Showing test notification...');
+  console.log('🔔 Testing system-level notification...');
 
-  // Show test notification with the exact elephant alert message
-  showNotification(
-    '🚨 Elephant Within Perimeter',
-    'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
-    '🐘',
-    'test-elephant-alert'
-  );
+  try {
+    // Test both regular and system-level notifications
+    showNotification(
+      '🚨 Elephant Within Perimeter',
+      'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+      '🐘',
+      'test-elephant-alert'
+    );
 
-  // Also show success message in UI
-  setTimeout(() => {
-    console.log('✅ Test notification sent');
-    alert('Test notification sent! Check your notification panel if you don\'t see it immediately.');
-  }, 1000);
+    // Test system-level notification
+    await triggerSystemNotification({
+      title: '🚨 Elephant Within Perimeter (System Test)',
+      body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+      elephantId: 'test-elephant',
+      distance: 2.5,
+      userLocation: userLocation
+    });
+
+    // Show success message in UI
+    setTimeout(() => {
+      console.log('✅ Test notifications sent');
+      alert('System notification test sent! This notification should appear even if you close the app or lock your phone.');
+    }, 1000);
+
+  } catch (error) {
+    console.error('❌ Test notification failed:', error);
+    alert('Test notification failed. Please check browser console for details.');
+  }
 });
 
 manageSubscriptionBtn.addEventListener('click', () => {
