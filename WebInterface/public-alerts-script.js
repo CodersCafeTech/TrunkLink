@@ -614,12 +614,28 @@ function getLatestLocation(locations) {
   let latestLocation = null;
   let latestTimestamp = 0;
 
-  Object.values(locations).forEach(location => {
-    if (location.timestamp && location.latitude && location.longitude) {
-      const timestamp = new Date(location.timestamp).getTime();
-      if (timestamp > latestTimestamp) {
-        latestTimestamp = timestamp;
-        latestLocation = location;
+  Object.values(locations).forEach(locationData => {
+    // Handle nested structure: uplink_message.decoded_payload
+    let location = locationData;
+    if (locationData.uplink_message && locationData.uplink_message.decoded_payload) {
+      location = locationData.uplink_message.decoded_payload;
+    }
+
+    // Support both lat/lng and latitude/longitude formats
+    const lat = location.latitude || location.lat;
+    const lng = location.longitude || location.lng;
+    const timestamp = location.timestamp;
+
+    if (timestamp && lat && lng) {
+      const timestampMs = new Date(timestamp).getTime();
+      if (timestampMs > latestTimestamp) {
+        latestTimestamp = timestampMs;
+        latestLocation = {
+          latitude: lat,
+          longitude: lng,
+          timestamp: timestamp,
+          alert_type: location.alert_type || 'routine_update'
+        };
       }
     }
   });
