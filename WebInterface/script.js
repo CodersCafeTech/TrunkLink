@@ -427,6 +427,287 @@ function drawSpline() {
   });
 }
 
+// ===== GEOFENCE MONITORING AND ALERT SYSTEM =====
+
+// Push notification backend configuration
+const PUSH_BACKEND_URL = 'https://push-ej51.onrender.com';
+
+// Store for tracking geofence breaches (prevent duplicate alerts)
+const geofenceBreaches = new Map();
+
+// Store current alert data for map navigation
+let currentAlertData = null;
+
+// Helper function to check if a point is inside a polygon (Ray Casting Algorithm)
+function isPointInPolygon(point, polygon) {
+  const x = point.lat, y = point.lng;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+
+    const intersect = ((yi > y) !== (yj > y)) &&
+      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+// Show floating alert card on dashboard
+function showAlertCard(elephantId, alertType, elephantLocation) {
+  const alertCard = document.getElementById('alertCard');
+  const alertTitle = document.getElementById('alertTitle');
+  const alertMessage = document.getElementById('alertMessage');
+  const alertLocation = document.getElementById('alertLocation');
+  const alertTime = document.getElementById('alertTime');
+
+  // Store alert data for map navigation
+  currentAlertData = {
+    elephantId: elephantId,
+    location: elephantLocation
+  };
+
+  // Configure alert based on type
+  if (alertType === 'breach') {
+    alertCard.className = 'alert-card breach';
+    alertTitle.innerHTML = '<i class="fas fa-exclamation-triangle"></i> GEOFENCE BREACH';
+    alertMessage.textContent = `${elephantId} has crossed the geofence boundary! Immediate action required.`;
+  } else {
+    alertCard.className = 'alert-card return';
+    alertTitle.innerHTML = '<i class="fas fa-check-circle"></i> GEOFENCE RE-ENTRY';
+    alertMessage.textContent = `${elephantId} has returned inside the geofence boundary.`;
+  }
+
+  // Update location and time
+  alertLocation.textContent = `Location: ${elephantLocation.lat.toFixed(6)}, ${elephantLocation.lng.toFixed(6)}`;
+  alertTime.textContent = `Time: ${new Date().toLocaleTimeString()}`;
+
+  // Show the alert card
+  alertCard.classList.remove('hidden');
+
+  // Play alert sound (optional)
+  if (alertType === 'breach') {
+    playAlertSound();
+  }
+
+  // Auto-hide after 30 seconds for return alerts
+  if (alertType === 'return') {
+    setTimeout(() => {
+      if (!alertCard.classList.contains('hidden')) {
+        closeAlert();
+      }
+    }, 30000);
+  }
+}
+
+// Close alert card
+function closeAlert() {
+  const alertCard = document.getElementById('alertCard');
+  alertCard.classList.add('hidden');
+  currentAlertData = null;
+}
+
+// Dismiss alert (same as close but acknowledges)
+function dismissAlert() {
+  closeAlert();
+}
+
+// View alert location on map
+function viewAlertOnMap() {
+  if (currentAlertData) {
+    const { elephantId, location } = currentAlertData;
+
+    // Center map on alert location
+    map.setView([location.lat, location.lng], 15);
+
+    // Add temporary marker
+    const alertMarker = L.marker([location.lat, location.lng], {
+      icon: L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+      })
+    }).addTo(map);
+
+    alertMarker.bindPopup(`<b>⚠️ ${elephantId} Alert</b><br>Lat: ${location.lat.toFixed(6)}<br>Lng: ${location.lng.toFixed(6)}`).openPopup();
+
+    // Remove marker after 10 seconds
+    setTimeout(() => {
+      map.removeLayer(alertMarker);
+    }, 10000);
+  }
+}
+
+// Play alert sound
+function playAlertSound() {
+  // Create audio context for alert sound
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
+  } catch (error) {
+    console.warn('Could not play alert sound:', error);
+  }
+}
+
+// Send push notification to rangers
+async function sendGeofenceAlert(elephantId, alertType, geofenceData, elephantLocation) {
+  try {
+    console.log(`🚨 Sending geofence alert for ${elephantId}...`);
+
+    const title = alertType === 'breach'
+      ? `🚨 GEOFENCE BREACH: ${elephantId}`
+      : `✅ ${elephantId} Re-entered Geofence`;
+
+    const body = alertType === 'breach'
+      ? `${elephantId} has crossed the geofence boundary! Immediate action required.`
+      : `${elephantId} has returned inside the geofence boundary.`;
+
+    // Show floating alert card on dashboard
+    showAlertCard(elephantId, alertType, elephantLocation);
+
+    // Send to Push notification backend
+    const response = await fetch(`${PUSH_BACKEND_URL}/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: title,
+        body: body
+      })
+    });
+
+    if (response.ok) {
+      console.log(`✅ Geofence alert sent for ${elephantId}`);
+
+      // Log alert to Firebase
+      database.ref('geofence_alerts').push({
+        elephant_id: elephantId,
+        alert_type: alertType,
+        location: elephantLocation,
+        geofence_created_by: geofenceData.created_by,
+        ranger_id: geofenceData.ranger_id,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+      });
+    } else {
+      console.error('❌ Failed to send geofence alert');
+    }
+  } catch (error) {
+    console.error('❌ Error sending geofence alert:', error);
+  }
+}
+
+// Monitor elephant locations against geofences
+function startGeofenceMonitoring() {
+  console.log('🔍 Starting geofence monitoring system...');
+
+  // Listen for elephant location updates
+  database.ref('elephants').on('value', (elephantsSnapshot) => {
+    const elephants = elephantsSnapshot.val();
+    if (!elephants) return;
+
+    Object.keys(elephants).forEach(async (elephantKey) => {
+      const elephant = elephants[elephantKey];
+
+      // Check if elephant has a geofence
+      if (!elephant.geofence || !elephant.geofence.coordinates) {
+        return;
+      }
+
+      // Get latest elephant location
+      let latestLocation = null;
+      if (elephant.locations) {
+        latestLocation = getLatestLocationFromArray(elephant.locations);
+      } else if (elephant.livelocation) {
+        latestLocation = {
+          lat: parseFloat(elephant.livelocation.lat),
+          lng: parseFloat(elephant.livelocation.lng)
+        };
+      }
+
+      if (!latestLocation) {
+        return;
+      }
+
+      // Parse geofence coordinates
+      let geofenceCoords = elephant.geofence.coordinates;
+      if (geofenceCoords.endsWith('|')) {
+        geofenceCoords = geofenceCoords.slice(0, -1);
+      }
+
+      const polygon = geofenceCoords.split('|').map(pair => {
+        const [lat, lng] = pair.split(',');
+        return [parseFloat(lat), parseFloat(lng)];
+      });
+
+      // Check if elephant is inside geofence
+      const isInside = isPointInPolygon(latestLocation, polygon);
+      const breachKey = `${elephantKey}_breach`;
+      const previousState = geofenceBreaches.get(breachKey);
+
+      // Detect geofence breach (was inside, now outside)
+      if (previousState === true && !isInside) {
+        console.log(`🚨 GEOFENCE BREACH DETECTED: ${elephantKey}`);
+        await sendGeofenceAlert(elephantKey, 'breach', elephant.geofence, latestLocation);
+        geofenceBreaches.set(breachKey, false);
+      }
+      // Detect re-entry (was outside, now inside)
+      else if (previousState === false && isInside) {
+        console.log(`✅ ${elephantKey} re-entered geofence`);
+        await sendGeofenceAlert(elephantKey, 'return', elephant.geofence, latestLocation);
+        geofenceBreaches.set(breachKey, true);
+      }
+      // First time check - set initial state
+      else if (previousState === undefined) {
+        geofenceBreaches.set(breachKey, isInside);
+        console.log(`📍 Initial geofence state for ${elephantKey}: ${isInside ? 'Inside' : 'Outside'}`);
+      }
+    });
+  });
+}
+
+// Helper function to get latest location from locations array
+function getLatestLocationFromArray(locations) {
+  if (!locations) return null;
+
+  let latestLocation = null;
+  let latestTimestamp = 0;
+
+  Object.values(locations).forEach(location => {
+    if (location.timestamp && location.latitude && location.longitude) {
+      const timestamp = new Date(location.timestamp).getTime();
+      if (timestamp > latestTimestamp) {
+        latestTimestamp = timestamp;
+        latestLocation = {
+          lat: parseFloat(location.latitude),
+          lng: parseFloat(location.longitude)
+        };
+      }
+    }
+  });
+
+  return latestLocation;
+}
+
 
 // Call the function to load options when the page is loaded
 window.onload = function () {
@@ -440,6 +721,10 @@ window.onload = function () {
 
   // Load elephants
   fetchElephants();
+
+  // Start geofence monitoring system
+  startGeofenceMonitoring();
+  console.log('✅ Geofence monitoring system activated');
 
   // Set up periodic session check (every 5 minutes)
   setInterval(() => {

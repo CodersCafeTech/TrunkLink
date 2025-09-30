@@ -75,6 +75,39 @@
               <!-- Options will be populated here dynamically -->
             </select>
           </div>
+
+        <!-- Floating Alert Card -->
+        <div id="alertCard" class="alert-card hidden">
+            <div class="alert-header">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="alertTitle">Geofence Alert</span>
+                <button onclick="closeAlert()" class="close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="alert-body">
+                <p id="alertMessage"></p>
+                <div class="alert-details">
+                    <div class="detail-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span id="alertLocation">Location: --</span>
+                    </div>
+                    <div class="detail-item">
+                        <i class="fas fa-clock"></i>
+                        <span id="alertTime">Time: --</span>
+                    </div>
+                </div>
+            </div>
+            <div class="alert-actions">
+                <button onclick="viewAlertOnMap()" class="action-btn primary">
+                    <i class="fas fa-map"></i> View on Map
+                </button>
+                <button onclick="dismissAlert()" class="action-btn secondary">
+                    <i class="fas fa-check"></i> Acknowledge
+                </button>
+            </div>
+        </div>
+
         <div class="neumorphic-card">
             <div id="map"></div>
             <div class="coordinates">
