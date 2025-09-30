@@ -176,12 +176,108 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    body {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        margin: 0;
+        padding: 15px;
+        border-radius: 0;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .sidebar img {
+        display: none;
+    }
+
+    .sidebar a {
+        margin: 5px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        flex: 0 0 auto;
+    }
+
+    .sidebar a i {
+        font-size: 1.1rem;
+        margin-right: 5px;
+    }
+
+    .sidebar .logout {
+        position: static;
+        margin-top: 0;
+    }
+
+    .main-content {
+        flex: 1;
+        padding: 15px;
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    .main-content h1 {
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+    }
+
+    .dropdown-container {
+        margin-bottom: 15px;
+    }
+
+    .dropdown-container select {
+        width: 100%;
+        padding: 10px;
+        font-size: 1rem;
+    }
+
+    .neumorphic-card {
+        margin: 0;
+        padding: 10px;
+        border-radius: 15px;
+    }
+
+    #map {
+        height: 50vh;
+        min-height: 300px;
+    }
+
+    .coordinates {
+        font-size: 0.8rem;
+        padding: 8px;
+    }
+
     .alert-card {
         top: 10px;
         right: 10px;
         left: 10px;
         width: auto;
         max-width: none;
+    }
+
+    .alert-header {
+        padding: 15px;
+    }
+
+    .alert-body {
+        padding: 15px;
+    }
+
+    .alert-actions {
+        flex-direction: column;
+        padding: 0 15px 15px 15px;
+    }
+
+    .action-btn {
+        width: 100%;
+        margin-bottom: 5px;
     }
 }
 

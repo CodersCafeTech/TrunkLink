@@ -830,9 +830,9 @@ function initializeFormHandling() {
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isChrome = /Chrome/i.test(navigator.userAgent);
 
-    if (error.code === 'PERMISSION_DENIED') {
+    if (error.code === 'PERMISSION_DENIED' || error.message.includes('permission')) {
       if (isAndroid) {
-        errorMessage = 'Database access denied. This is likely a Firebase security rules issue. Please contact support with error code: ANDROID_PERMISSION_DENIED';
+        errorMessage = 'Notification permission denied. Please enable notifications in your browser settings.';
       } else {
         errorMessage = 'Access denied. Please check your internet connection and try again.';
       }
