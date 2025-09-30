@@ -2,7 +2,8 @@ const express = require('express');
 const webpush = require('web-push');
 const cors = require('cors');
 const helmet = require('helmet');
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase/app');
+const { getDatabase, ref, set, push, get, remove, serverTimestamp } = require('firebase/database');
 const cron = require('node-cron');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 require('dotenv').config();
@@ -34,35 +35,20 @@ const rateLimiterMiddleware = async (req, res, next) => {
 
 app.use(rateLimiterMiddleware);
 
-// Initialize Firebase Admin
-const serviceAccount = {
-  type: "service_account",
-  project_id: process.env.FIREBASE_PROJECT_ID || "geofence-5bdcc",
-  private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-  client_id: process.env.FIREBASE_CLIENT_ID,
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL
-};
-
-// Initialize Firebase with error handling
+// Initialize Firebase for public database
 let db = null;
 let firebaseEnabled = false;
 
 try {
-  // Initialize with minimal config for public database access
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://geofence-5bdcc-default-rtdb.firebaseio.com",
-      projectId: process.env.FIREBASE_PROJECT_ID || "geofence-5bdcc"
-    });
-  }
-  db = admin.database();
+  const firebaseConfig = {
+    databaseURL: process.env.FIREBASE_DATABASE_URL || "https://geofence-5bdcc-default-rtdb.firebaseio.com",
+    projectId: process.env.FIREBASE_PROJECT_ID || "geofence-5bdcc"
+  };
+
+  const firebaseApp = initializeApp(firebaseConfig);
+  db = getDatabase(firebaseApp);
   firebaseEnabled = true;
-  console.log('✅ Firebase Admin initialized for public database');
+  console.log('✅ Firebase initialized for public database');
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error.message);
   console.log('🔧 Running without Firebase - using in-memory storage');
@@ -178,13 +164,13 @@ app.post('/api/subscribe', async (req, res) => {
       location: location,
       pushSubscription: subscription,
       status: 'active',
-      subscribed_at: admin.database.ServerValue.TIMESTAMP,
-      last_updated: admin.database.ServerValue.TIMESTAMP,
+      subscribed_at: serverTimestamp(),
+      last_updated: serverTimestamp(),
       user_agent: req.headers['user-agent'] || '',
       ip_address: req.ip
     };
 
-    await db.ref('public_subscribers/' + subscriptionId).set(subscriptionData);
+    await set(ref(db, 'public_subscribers/' + subscriptionId), subscriptionData);
 
     console.log(`✅ New subscription: ${subscriptionId}`);
 
@@ -219,7 +205,7 @@ app.post('/api/unsubscribe', async (req, res) => {
       return res.status(400).json({ error: 'Subscription ID required' });
     }
 
-    await db.ref('public_subscribers/' + subscriptionId).remove();
+    await remove(ref(db, 'public_subscribers/' + subscriptionId));
 
     res.json({
       success: true,
@@ -241,13 +227,13 @@ app.post('/api/test-notification', async (req, res) => {
 
     if (subscriptionId) {
       // Send to specific subscriber
-      const snapshot = await db.ref('public_subscribers/' + subscriptionId).once('value');
+      const snapshot = await get(ref(db, 'public_subscribers/' + subscriptionId));
       if (snapshot.exists()) {
         subscriptions.push({ id: subscriptionId, data: snapshot.val() });
       }
     } else {
       // Send to all subscribers
-      const snapshot = await db.ref('public_subscribers').once('value');
+      const snapshot = await get(ref(db, 'public_subscribers'));
       if (snapshot.exists()) {
         const allSubs = snapshot.val();
         subscriptions = Object.keys(allSubs).map(id => ({ id, data: allSubs[id] }));
@@ -295,13 +281,13 @@ app.post('/api/check-proximity', async (req, res) => {
     console.log('🔍 Manual proximity check requested');
 
     // Get all subscribers
-    const subscribersSnapshot = await db.ref('public_subscribers').once('value');
+    const subscribersSnapshot = await get(ref(db, 'public_subscribers'));
     if (!subscribersSnapshot.exists()) {
       return res.json({ message: 'No subscribers found' });
     }
 
     // Get all elephants
-    const elephantsSnapshot = await db.ref('elephants').once('value');
+    const elephantsSnapshot = await get(ref(db, 'elephants'));
     if (!elephantsSnapshot.exists()) {
       return res.json({ message: 'No elephant data found' });
     }
@@ -340,8 +326,8 @@ app.post('/api/check-proximity', async (req, res) => {
         // If within 5km, send alert
         if (distance <= 5) {
           // Check if recent alert exists (prevent spam)
-          const recentAlertRef = db.ref(`recent_alerts/${subscriberId}_${elephantId}`);
-          const recentSnapshot = await recentAlertRef.once('value');
+          const recentAlertRef = ref(db, `recent_alerts/${subscriberId}_${elephantId}`);
+          const recentSnapshot = await get(recentAlertRef);
 
           const now = Date.now();
           const thirtyMinutes = 30 * 60 * 1000;
@@ -377,14 +363,14 @@ app.post('/api/check-proximity', async (req, res) => {
             alertsSent++;
 
             // Record the alert
-            await recentAlertRef.set({ timestamp: now, distance: distance });
+            await set(recentAlertRef, { timestamp: now, distance: distance });
 
             // Log to proximity_alerts
-            await db.ref('proximity_alerts').push({
+            await push(ref(db, 'proximity_alerts'), {
               subscriber_id: subscriberId,
               elephant_id: elephantId,
               distance_km: distance,
-              timestamp: admin.database.ServerValue.TIMESTAMP,
+              timestamp: serverTimestamp(),
               notification_sent: true,
               payload: payload
             });
@@ -415,9 +401,9 @@ app.post('/api/check-proximity', async (req, res) => {
 // Get system stats
 app.get('/api/stats', async (req, res) => {
   try {
-    const subscribersSnapshot = await db.ref('public_subscribers').once('value');
-    const elephantsSnapshot = await db.ref('elephants').once('value');
-    const alertsSnapshot = await db.ref('proximity_alerts').limitToLast(100).once('value');
+    const subscribersSnapshot = await get(ref(db, 'public_subscribers'));
+    const elephantsSnapshot = await get(ref(db, 'elephants'));
+    const alertsSnapshot = await get(ref(db, 'proximity_alerts'));
 
     const stats = {
       total_subscribers: subscribersSnapshot.exists() ? Object.keys(subscribersSnapshot.val()).length : 0,
