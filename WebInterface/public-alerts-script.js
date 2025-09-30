@@ -307,72 +307,74 @@ function startLocationWatching() {
 async function triggerSystemNotification(data) {
   console.log('🚀 Triggering system-level notification:', data);
 
+  // First check if notifications are supported and permitted
+  if (!('Notification' in window)) {
+    console.error('❌ Notifications not supported');
+    alert('Notifications not supported in this browser');
+    return false;
+  }
+
+  if (Notification.permission !== 'granted') {
+    console.error('❌ Notification permission not granted');
+    alert('Please enable notifications first!');
+    return false;
+  }
+
   try {
-    // Check if service worker is available
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      console.log('📡 Sending notification via service worker...');
+    // Create direct browser notification - this will show as system popup
+    const notification = new Notification(data.title, {
+      body: data.body,
+      icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="32" cy="32" r="30" fill="%23ff4444"/%3E%3Ctext x="32" y="38" text-anchor="middle" fill="white" font-size="32"%3E🐘%3C/text%3E%3C/svg%3E',
+      vibrate: [1000, 500, 1000, 500, 1000],
+      requireInteraction: true,
+      tag: 'elephant-alert-' + Date.now(), // Unique tag to prevent blocking
+      renotify: true,
+      silent: false,
+      timestamp: Date.now()
+    });
 
-      // Send message to service worker to trigger notification
-      const channel = new MessageChannel();
+    // Set up click handler
+    notification.onclick = function() {
+      console.log('📱 Notification clicked');
+      window.focus();
+      this.close();
+    };
 
-      return new Promise((resolve, reject) => {
-        channel.port1.onmessage = (event) => {
-          if (event.data.success) {
-            console.log('✅ System notification triggered successfully');
-            resolve(true);
-          } else {
-            console.error('❌ System notification failed:', event.data.error);
-            reject(new Error(event.data.error));
-          }
-        };
+    // Set up error handler
+    notification.onerror = function(error) {
+      console.error('❌ Notification error:', error);
+    };
 
-        // Use the service worker registration to show notification directly
-        navigator.serviceWorker.ready.then(registration => {
-          return registration.showNotification(data.title, {
-            body: data.body,
-            icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="32" cy="32" r="30" fill="%23ff4444"/%3E%3Ctext x="32" y="38" text-anchor="middle" fill="white" font-size="32"%3E🐘%3C/text%3E%3C/svg%3E',
-            badge: 'data:image/svg+xml,%3Csvg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="48" cy="48" r="48" fill="%23ff4444"/%3E%3Ctext x="48" y="58" text-anchor="middle" fill="white" font-size="48"%3E⚠️%3C/text%3E%3C/svg%3E',
-            vibrate: [1000, 500, 1000, 500, 1000],
-            requireInteraction: true,
-            persistent: true,
-            silent: false,
-            tag: 'elephant-critical-alert',
-            renotify: true,
-            timestamp: Date.now(),
-            actions: [
-              {
-                action: 'view',
-                title: '📍 View Location'
-              },
-              {
-                action: 'safe',
-                title: '✅ I Am Safe'
-              }
-            ],
-            data: {
-              elephantId: data.elephantId,
-              distance: data.distance,
-              timestamp: Date.now(),
-              userLocation: data.userLocation,
-              critical: true
-            }
-          });
-        }).then(() => {
-          console.log('✅ System notification shown via service worker registration');
-          resolve(true);
-        }).catch(error => {
-          console.error('❌ Failed to show system notification:', error);
-          reject(error);
-        });
-      });
-    } else {
-      console.warn('⚠️ Service worker not available, using fallback notification');
-      // Fallback to regular notification
-      showNotification(data.title, data.body, '🐘', 'elephant-system-fallback');
-      return true;
-    }
+    // Set up show handler
+    notification.onshow = function() {
+      console.log('✅ System notification displayed successfully');
+    };
+
+    console.log('✅ System notification created and should be visible');
+    return true;
+
   } catch (error) {
-    console.error('❌ Error triggering system notification:', error);
+    console.error('❌ Error creating system notification:', error);
+
+    // Fallback: try service worker method
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(data.title, {
+          body: data.body,
+          icon: 'data:image/svg+xml,%3Csvg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="32" cy="32" r="30" fill="%23ff4444"/%3E%3Ctext x="32" y="38" text-anchor="middle" fill="white" font-size="32"%3E🐘%3C/text%3E%3C/svg%3E',
+          vibrate: [1000, 500, 1000, 500, 1000],
+          requireInteraction: true,
+          tag: 'elephant-alert-sw-' + Date.now(),
+          renotify: true
+        });
+        console.log('✅ Fallback service worker notification shown');
+        return true;
+      }
+    } catch (swError) {
+      console.error('❌ Service worker notification also failed:', swError);
+    }
+
     throw error;
   }
 }
@@ -807,6 +809,22 @@ subscriptionForm.addEventListener('submit', async (e) => {
       console.log('🚀 Starting automatic push notifications...');
       startAutoPushNotifications();
     }, 5000); // Start 5 seconds after subscription
+
+    // Show immediate test notification
+    setTimeout(async () => {
+      console.log('📱 Sending immediate test notification...');
+      try {
+        await triggerSystemNotification({
+          title: '🚨 Elephant Within Perimeter',
+          body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+          elephantId: 'immediate-test',
+          distance: 1.5,
+          userLocation: userLocation
+        });
+      } catch (error) {
+        console.error('❌ Immediate test notification failed:', error);
+      }
+    }, 3000);
 
   } catch (error) {
     console.error('Subscription failed:', error);
