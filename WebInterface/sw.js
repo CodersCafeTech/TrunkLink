@@ -53,6 +53,34 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+// Real-time Firebase monitoring using periodic sync
+let monitoringIntervalId = null;
+
+function startContinuousMonitoring() {
+  if (monitoringIntervalId) {
+    clearInterval(monitoringIntervalId);
+  }
+
+  // Check every 10 seconds for new elephant locations
+  monitoringIntervalId = setInterval(async () => {
+    try {
+      await performBackgroundElephantCheck();
+    } catch (error) {
+      console.error('Background monitoring error:', error);
+    }
+  }, 10000); // 10 seconds
+
+  console.log('✅ Continuous monitoring started - checking every 10 seconds');
+}
+
+function stopContinuousMonitoring() {
+  if (monitoringIntervalId) {
+    clearInterval(monitoringIntervalId);
+    monitoringIntervalId = null;
+    console.log('🛑 Continuous monitoring stopped');
+  }
+}
+
 // Enhanced push notification handling for system-level notifications
 self.addEventListener('push', (event) => {
   console.log('🔔 Push notification received in service worker');
@@ -159,29 +187,37 @@ self.addEventListener('notificationclick', (event) => {
   notification.close();
 });
 
-// Background elephant proximity checking with Firebase
+// Enhanced background elephant proximity checking with Firebase
 async function performBackgroundElephantCheck() {
   try {
+    console.log('🔍 Performing background elephant check...');
+
     if (!userSubscriptionData) {
       // Try to retrieve from IndexedDB
       userSubscriptionData = await getStoredSubscriptionData();
     }
 
     if (!userSubscriptionData || !userSubscriptionData.location) {
-      console.log('No user location data for background check');
+      console.log('⚠️ No user location data for background check');
       return;
     }
+
+    console.log('📍 User location found:', userSubscriptionData.location);
 
     // Fetch elephant data from Firebase
     const elephantData = await fetchElephantData();
 
     if (elephantData) {
+      console.log('🐘 Elephant data retrieved, checking proximity...');
       await checkProximityAndNotify(elephantData, userSubscriptionData);
+    } else {
+      console.log('📭 No elephant data available');
     }
 
     lastElephantCheck = Date.now();
+    console.log('✅ Background check completed at', new Date().toLocaleTimeString());
   } catch (error) {
-    console.error('Background elephant check failed:', error);
+    console.error('❌ Background elephant check failed:', error);
   }
 }
 

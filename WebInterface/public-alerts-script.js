@@ -442,6 +442,74 @@ async function requestNotificationPermission() {
   }
 }
 
+// VAPID public key (you'll generate this)
+const VAPID_PUBLIC_KEY = 'BIGFGakKm1X-Y3vW5wkUf7T5l8M5lIxHQBtGmrkBzDQXbCsQiX0zSXUPBTdeL9a-D31iSz63exZ8j1oXOsA_w1Q';
+
+// Backend API configuration
+const BACKEND_URL = 'https://trunklink-backend.onrender.com/'; // Change this to your deployed backend URL
+
+// Subscribe to push notifications
+async function subscribeToPush() {
+  try {
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+
+    console.log('Push subscription successful:', subscription);
+    return subscription;
+  } catch (error) {
+    console.error('Failed to subscribe to push notifications:', error);
+    throw error;
+  }
+}
+
+// Send subscription to backend
+async function sendSubscriptionToBackend(subscription, userInfo, location) {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/subscribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscription: subscription,
+        userInfo: userInfo,
+        location: location
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Subscription sent to backend:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Failed to send subscription to backend:', error);
+    throw error;
+  }
+}
+
+// Helper function to convert VAPID key
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 // Subscription Management
 async function subscribeToAlerts(formData) {
   try {
@@ -454,57 +522,20 @@ async function subscribeToAlerts(formData) {
       throw new Error('Full name and phone number are required');
     }
 
-    // Test Firebase connection first with better error handling
-    try {
-      // Check if we're on localhost vs production
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // Subscribe to push notifications
+    const pushSubscription = await subscribeToPush();
 
-      // Test connection with timeout for production environments
-      const connectionPromise = database.ref('.info/connected').once('value');
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Firebase connection timeout')), 10000);
-      });
-
-      await Promise.race([connectionPromise, timeoutPromise]);
-      console.log('Firebase connection test passed');
-    } catch (connectionError) {
-      console.error('Firebase connection failed:', connectionError);
-      throw new Error('Unable to connect to database. Please check your internet connection and try again.');
-    }
-
-    subscriptionId = generateSubscriptionId();
-    console.log('Creating subscription with ID:', subscriptionId);
-
-    const subscriptionData = {
-      id: subscriptionId,
+    // Send subscription to backend
+    const userInfo = {
       name: formData.fullName.trim(),
       phone: formData.phoneNumber.trim(),
-      email: formData.email ? formData.email.trim() : null,
-      location: userLocation,
-      preferences: {
-        webNotifications: formData.webNotifications,
-        quietHours: {
-          start: formData.quietStart,
-          end: formData.quietEnd
-        }
-      },
-      status: 'active',
-      subscribed_at: firebase.database.ServerValue.TIMESTAMP,
-      last_updated: firebase.database.ServerValue.TIMESTAMP,
-      last_location_update: firebase.database.ServerValue.TIMESTAMP
+      email: formData.email ? formData.email.trim() : null
     };
 
-    console.log('Attempting to save subscription data:', subscriptionData);
+    const backendResult = await sendSubscriptionToBackend(pushSubscription, userInfo, userLocation);
+    subscriptionId = backendResult.subscriptionId;
 
-    // Save subscription to Firebase with timeout
-    const savePromise = database.ref('public_subscribers/' + subscriptionId).set(subscriptionData);
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Database write timeout - please try again')), 15000);
-    });
-
-    await Promise.race([savePromise, timeoutPromise]);
-
-    console.log('Subscription saved successfully');
+    console.log('Subscription created with backend:', subscriptionId);
 
     // Store subscription ID locally
     localStorage.setItem('trunklink_subscription_id', subscriptionId);
