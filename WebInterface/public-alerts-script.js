@@ -638,7 +638,7 @@ function startProximityMonitoring() {
           console.log(`📏 Distance to ${elephantKey}: ${distance.toFixed(2)}km`);
 
           // Check if elephant is within 5km
-          if (distance <= 5) {
+          if (distance <= 300) {
             console.log(`🚨 PROXIMITY ALERT: ${elephantKey} is within 5km (${distance.toFixed(2)}km)`);
 
             // Create a mock livelocation object for compatibility with existing alert system
@@ -671,7 +671,7 @@ function startProximityMonitoring() {
 
           console.log(`📏 Distance to ${elephantKey} (old format): ${distance.toFixed(2)}km`);
 
-          if (distance <= 5) {
+          if (distance <= 300) {
             console.log(`🚨 PROXIMITY ALERT: ${elephantKey} is within 5km (${distance.toFixed(2)}km) - old format`);
             sendProximityAlert(elephantKey, elephant, distance);
           }
