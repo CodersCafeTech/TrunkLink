@@ -459,6 +459,10 @@ async function subscribeToPush() {
     });
 
     console.log('Push subscription successful:', subscription);
+    console.log('Subscription object details:', {
+      endpoint: subscription.endpoint,
+      keys: subscription.keys
+    });
     return subscription;
   } catch (error) {
     console.error('Failed to subscribe to push notifications:', error);
@@ -469,6 +473,12 @@ async function subscribeToPush() {
 // Send subscription to backend
 async function sendSubscriptionToBackend(subscription, userInfo, location) {
   try {
+    console.log('Sending subscription to backend:', {
+      subscription: subscription,
+      userInfo: userInfo,
+      location: location
+    });
+
     const response = await fetch(`${BACKEND_URL}/api/subscribe`, {
       method: 'POST',
       headers: {
