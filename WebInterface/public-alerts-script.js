@@ -35,8 +35,11 @@ let notificationPermission = false;
 let subscriptionId = null;
 
 // DOM Elements (will be initialized after DOM loads)
-let subscriptionForm, requestLocationBtn, locationStatus, subscribeBtn;
-let subscribeText, subscribeSpinner, successMessage, testNotificationBtn, manageSubscriptionBtn;
+let subscriptionForm, subscriptionFormMobile, requestLocationBtn, requestLocationBtnMobile;
+let locationStatus, locationStatusMobile, subscribeBtn, subscribeBtnMobile;
+let subscribeText, subscribeTextMobile, subscribeSpinner, subscribeSpinnerMobile;
+let successMessage, successMessageMobile, testNotificationBtn, testNotificationBtnMobile;
+let manageSubscriptionBtn, manageSubscriptionBtnMobile;
 
 // Utility Functions
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -740,12 +743,24 @@ async function sendProximityAlert(elephantKey, elephantData, distance) {
 
 // Form Handling (will be attached after DOM loads)
 function initializeFormHandling() {
-  if (!subscriptionForm) return;
+  // Handle desktop form
+  if (subscriptionForm) {
+    subscriptionForm.addEventListener('submit', handleFormSubmit);
+  }
 
-  subscriptionForm.addEventListener('submit', async (e) => {
+  // Handle mobile form
+  if (subscriptionFormMobile) {
+    subscriptionFormMobile.addEventListener('submit', handleFormSubmit);
+  }
+}
+
+async function handleFormSubmit(e) {
   e.preventDefault();
 
   console.log('🚀 Form submitted - starting subscription process...');
+
+  // Determine if this is mobile or desktop form
+  const isMobile = e.target.id === 'subscriptionFormMobile';
 
   // Location check disabled for testing
   // if (!userLocation) {
@@ -760,35 +775,36 @@ function initializeFormHandling() {
     if (!proceed) return;
   }
 
-  // Show loading state
-  if (subscribeBtn) subscribeBtn.disabled = true;
-  if (subscribeText) subscribeText.classList.add('hidden');
-  if (subscribeSpinner) subscribeSpinner.classList.remove('hidden');
+  // Show loading state based on form type
+  const btnEl = isMobile ? subscribeBtnMobile : subscribeBtn;
+  const textEl = isMobile ? subscribeTextMobile : subscribeText;
+  const spinnerEl = isMobile ? subscribeSpinnerMobile : subscribeSpinner;
+
+  if (btnEl) btnEl.disabled = true;
+  if (textEl) textEl.classList.add('hidden');
+  if (spinnerEl) spinnerEl.classList.remove('hidden');
 
   try {
-    // Collect form data with null checks
-    const fullNameEl = document.getElementById('fullName');
-    const phoneNumberEl = document.getElementById('phoneNumber');
-    const emailEl = document.getElementById('email');
-    const webNotificationsEl = document.getElementById('webNotifications');
-    const quietStartEl = document.getElementById('quietStart');
-    const quietEndEl = document.getElementById('quietEnd');
+    // Collect form data with null checks - support both desktop and mobile IDs
+    const fullNameEl = document.getElementById(isMobile ? 'fullNameMobile' : 'fullName');
+    const phoneNumberEl = document.getElementById(isMobile ? 'phoneNumberMobile' : 'phoneNumber');
+    const emailEl = document.getElementById(isMobile ? 'emailMobile' : 'email');
 
     const formData = {
       fullName: fullNameEl ? fullNameEl.value : '',
       phoneNumber: phoneNumberEl ? phoneNumberEl.value : '',
-      email: emailEl ? emailEl.value : '',
-      webNotifications: webNotificationsEl ? webNotificationsEl.checked : true,
-      quietStart: quietStartEl ? quietStartEl.value : '22:00',
-      quietEnd: quietEndEl ? quietEndEl.value : '06:00'
+      email: emailEl ? emailEl.value : ''
     };
 
     // Subscribe to alerts
     await subscribeToAlerts(formData);
 
-    // Show success message
-    if (subscriptionForm) subscriptionForm.style.display = 'none';
-    if (successMessage) successMessage.classList.remove('hidden');
+    // Show success message based on form type
+    const formEl = isMobile ? subscriptionFormMobile : subscriptionForm;
+    const successEl = isMobile ? successMessageMobile : successMessage;
+
+    if (formEl) formEl.style.display = 'none';
+    if (successEl) successEl.classList.remove('hidden');
 
     // Send test notification
     setTimeout(() => {
@@ -837,12 +853,11 @@ function initializeFormHandling() {
     // Alert the error instead of showing UI message
     alert(`Subscription Error:\n\nError: ${error.message}\nCode: ${error.code || 'N/A'}\n\nCheck console for full details.`);
   } finally {
-    // Reset loading state
-    if (subscribeBtn) subscribeBtn.disabled = false;
-    if (subscribeText) subscribeText.classList.remove('hidden');
-    if (subscribeSpinner) subscribeSpinner.classList.add('hidden');
+    // Reset loading state based on form type
+    if (btnEl) btnEl.disabled = false;
+    if (textEl) textEl.classList.remove('hidden');
+    if (spinnerEl) spinnerEl.classList.add('hidden');
   }
-  });
 }
 
 // Debug function to check DOM elements
@@ -872,65 +887,82 @@ function checkDOMElements() {
 
 // Initialize event listeners
 function initializeEventListeners() {
-  // Location button
+  // Location buttons - desktop and mobile
   if (requestLocationBtn) {
     requestLocationBtn.addEventListener('click', requestLocationPermission);
-    console.log('✅ Location button event listener added');
+    console.log('✅ Desktop location button event listener added');
   }
 
-  // Test notification button
-  if (testNotificationBtn) {
-    testNotificationBtn.addEventListener('click', async () => {
+  if (requestLocationBtnMobile) {
+    requestLocationBtnMobile.addEventListener('click', requestLocationPermission);
+    console.log('✅ Mobile location button event listener added');
+  }
+
+  // Test notification buttons - desktop and mobile
+  const handleTestNotification = async () => {
     console.log('🧪 Test system notification button clicked');
 
-  // Check notification permission first
-  if (Notification.permission !== 'granted') {
-    console.log('❓ Requesting notification permission before test...');
-    const granted = await requestNotificationPermission();
-    if (!granted) {
-      alert('Please enable notifications in your browser settings to receive alerts.');
-      return;
+    // Check notification permission first
+    if (Notification.permission !== 'granted') {
+      console.log('❓ Requesting notification permission before test...');
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        alert('Please enable notifications in your browser settings to receive alerts.');
+        return;
+      }
     }
+
+    console.log('🔔 Testing system-level notification...');
+
+    try {
+      // Test both regular and system-level notifications
+      showNotification(
+        '🚨 Elephant Within Perimeter',
+        'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+        '🐘',
+        'test-elephant-alert'
+      );
+
+      // Test system-level notification
+      await triggerSystemNotification({
+        title: '🚨 Elephant Within Perimeter (System Test)',
+        body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
+        elephantId: 'test-elephant',
+        distance: 2.5,
+        userLocation: userLocation
+      });
+
+      // Show success message in UI
+      setTimeout(() => {
+        console.log('✅ Test notifications sent');
+        alert('System notification test sent! This notification should appear even if you close the app or lock your phone.');
+      }, 1000);
+
+    } catch (error) {
+      console.error('❌ Test notification failed:', error);
+      alert('Test notification failed. Please check browser console for details.');
+    }
+  };
+
+  if (testNotificationBtn) {
+    testNotificationBtn.addEventListener('click', handleTestNotification);
   }
 
-  console.log('🔔 Testing system-level notification...');
-
-  try {
-    // Test both regular and system-level notifications
-    showNotification(
-      '🚨 Elephant Within Perimeter',
-      'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
-      '🐘',
-      'test-elephant-alert'
-    );
-
-    // Test system-level notification
-    await triggerSystemNotification({
-      title: '🚨 Elephant Within Perimeter (System Test)',
-      body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
-      elephantId: 'test-elephant',
-      distance: 2.5,
-      userLocation: userLocation
-    });
-
-    // Show success message in UI
-    setTimeout(() => {
-      console.log('✅ Test notifications sent');
-      alert('System notification test sent! This notification should appear even if you close the app or lock your phone.');
-    }, 1000);
-
-  } catch (error) {
-    console.error('❌ Test notification failed:', error);
-    alert('Test notification failed. Please check browser console for details.');
-  }
-    });
+  if (testNotificationBtnMobile) {
+    testNotificationBtnMobile.addEventListener('click', handleTestNotification);
   }
 
-  // Manage subscription button
+  // Manage subscription buttons - desktop and mobile
+  const handleManageSubscription = () => {
+    alert('Subscription management interface will be available soon. For now, contact support to modify your subscription.');
+  };
+
   if (manageSubscriptionBtn) {
-    manageSubscriptionBtn.addEventListener('click', () => {
-      alert('Subscription management interface will be available soon. For now, contact support to modify your subscription.');
-    });
+    manageSubscriptionBtn.addEventListener('click', handleManageSubscription);
+  }
+
+  if (manageSubscriptionBtnMobile) {
+    manageSubscriptionBtnMobile.addEventListener('click', handleManageSubscription);
   }
 }
 
@@ -975,7 +1007,7 @@ async function testFirebaseRules() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize DOM elements
+  // Initialize DOM elements - desktop
   subscriptionForm = document.getElementById('subscriptionForm');
   requestLocationBtn = document.getElementById('requestLocationBtn');
   locationStatus = document.getElementById('locationStatus');
@@ -985,6 +1017,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   successMessage = document.getElementById('successMessage');
   testNotificationBtn = document.getElementById('testNotificationBtn');
   manageSubscriptionBtn = document.getElementById('manageSubscriptionBtn');
+
+  // Initialize DOM elements - mobile
+  subscriptionFormMobile = document.getElementById('subscriptionFormMobile');
+  requestLocationBtnMobile = document.getElementById('requestLocationBtnMobile');
+  locationStatusMobile = document.getElementById('locationStatusMobile');
+  subscribeBtnMobile = document.getElementById('subscribeBtnMobile');
+  subscribeTextMobile = document.getElementById('subscribeTextMobile');
+  subscribeSpinnerMobile = document.getElementById('subscribeSpinnerMobile');
+  successMessageMobile = document.getElementById('successMessageMobile');
+  testNotificationBtnMobile = document.getElementById('testNotificationBtnMobile');
+  manageSubscriptionBtnMobile = document.getElementById('manageSubscriptionBtnMobile');
 
   // Initialize form handling and event listeners
   initializeFormHandling();
@@ -999,6 +1042,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // User is already subscribed (no Firebase check needed)
     if (subscriptionForm) subscriptionForm.style.display = 'none';
     if (successMessage) successMessage.classList.remove('hidden');
+    if (subscriptionFormMobile) subscriptionFormMobile.style.display = 'none';
+    if (successMessageMobile) successMessageMobile.classList.remove('hidden');
 
     // Start monitoring
     if (userLocation) {
