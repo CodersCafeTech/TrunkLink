@@ -442,11 +442,11 @@ async function requestNotificationPermission() {
   }
 }
 
-// VAPID public key (you'll generate this)
-const VAPID_PUBLIC_KEY = 'BIGFGakKm1X-Y3vW5wkUf7T5l8M5lIxHQBtGmrkBzDQXbCsQiX0zSXUPBTdeL9a-D31iSz63exZ8j1oXOsA_w1Q';
+// VAPID public key from working Push system
+const VAPID_PUBLIC_KEY = 'BAVqYcw91jG8w7OL3x4VgSf0b_GAxY4kSG53IxBRT-MvYQ2M3DO1Wu_mlCQw2vnFUrHqicpf5sVzbN1Pf0IMWUU';
 
-// Backend API configuration
-const BACKEND_URL = 'https://trunklink-backend.onrender.com/'; // Change this to your deployed backend URL
+// Backend API configuration - using working Push system
+const BACKEND_URL = 'https://push-ej51.onrender.com'; // Your working Push backend
 
 // Subscribe to push notifications
 async function subscribeToPush() {
@@ -479,16 +479,12 @@ async function sendSubscriptionToBackend(subscription, userInfo, location) {
       location: location
     });
 
-    const response = await fetch(`${BACKEND_URL}/api/subscribe`, {
+    const response = await fetch(`${BACKEND_URL}/subscribe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        subscription: subscription,
-        userInfo: userInfo,
-        location: location
-      })
+      body: JSON.stringify(subscription)
     });
 
     if (!response.ok) {
@@ -699,99 +695,33 @@ function startProximityMonitoring() {
 async function sendProximityAlert(elephantKey, elephantData, distance) {
   console.log(`🚨 Sending proximity alert for ${elephantKey} at ${distance.toFixed(2)}km`);
 
-  const alertKey = `${subscriptionId}_${elephantKey}_${Date.now()}`;
-
   try {
-    // Check if we've already sent an alert for this elephant recently (within 30 minutes)
-    console.log('🔍 Checking for recent alerts...');
+    // Send push notification via your working Push system
+    const response = await fetch(`${BACKEND_URL}/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: '🚨 Elephant Within Perimeter',
+        body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!'
+      })
+    });
 
-    const recentAlerts = await database.ref('proximity_alerts')
-      .orderByChild('subscriber_id')
-      .equalTo(subscriptionId)
-      .limitToLast(10)
-      .once('value');
+    if (response.ok) {
+      console.log(`✅ Elephant alert sent successfully via Push system for ${elephantKey} at ${distance.toFixed(1)}km`);
 
-    const alerts = recentAlerts.val() || {};
-    const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
-
-    console.log('📋 Recent alerts:', alerts);
-
-    const recentAlertForElephant = Object.values(alerts).find(alert =>
-      alert.elephant_id === elephantKey &&
-      alert.timestamp > thirtyMinutesAgo
-    );
-
-    if (recentAlertForElephant) {
-      console.log(`⏰ Recent alert already sent for ${elephantKey} - skipping`);
-      return;
-    }
-
-    console.log('✅ No recent alerts found - proceeding with new alert');
-  } catch (error) {
-    console.error('❌ Error checking recent alerts:', error);
-    // Continue with alert anyway
-  }
-
-  // Create alert record
-  const alertData = {
-    id: alertKey,
-    subscriber_id: subscriptionId,
-    elephant_id: elephantKey,
-    distance_km: distance,
-    user_location: userLocation,
-    elephant_location: elephantData.livelocation,
-    timestamp: firebase.database.ServerValue.TIMESTAMP,
-    sent_notifications: {
-      web: false
-    }
-  };
-
-  try {
-    // Save alert to database
-    console.log('💾 Saving alert to database:', alertData);
-    await database.ref('proximity_alerts/' + alertKey).set(alertData);
-    console.log('✅ Alert saved to database successfully');
-
-    // Send system-level notification with your requested message
-    const title = '🚨 Elephant Within Perimeter';
-    const body = 'Elephant Within Perimeter. Seek Shelter and Stay Safe!';
-
-    console.log('📢 Preparing system-level notification:', { title, body, notificationPermission });
-
-    if (notificationPermission) {
-      console.log('🔔 Sending system-level notification...');
-
-      // Send both web notification and system notification
-      showNotification(title, body, '🐘', `elephant-${elephantKey}`);
-
-      // Trigger system-level notification via service worker
-      await triggerSystemNotification({
-        title: title,
-        body: body,
-        elephantId: elephantKey,
-        distance: distance,
-        userLocation: userLocation
-      });
-
-      // Update notification status
-      await database.ref(`proximity_alerts/${alertKey}/sent_notifications/web`).set(true);
-      await database.ref(`proximity_alerts/${alertKey}/sent_notifications/system`).set(true);
-      console.log('✅ Notification status updated in database');
+      // Also show local notification as backup
+      showNotification('🚨 Elephant Within Perimeter', 'Elephant Within Perimeter. Seek Shelter and Stay Safe!', '🐘', `elephant-${elephantKey}`);
     } else {
-      console.warn('⚠️ Cannot send notification - permission not granted');
-      // Show alert as fallback
-      alert(`${title}\n\n${body}`);
+      console.error('❌ Failed to send elephant alert via Push system');
+      // Fallback to local notification only
+      showNotification('🚨 Elephant Within Perimeter', 'Elephant Within Perimeter. Seek Shelter and Stay Safe!', '🐘', `elephant-${elephantKey}`);
     }
-
-    // For critical alerts (< 2km), enhance the notification
-    if (distance < 2) {
-      console.log(`🚨 CRITICAL proximity alert for elephant ${elephantKey} at ${distance.toFixed(1)}km`);
-    }
-
-    console.log(`✅ Complete alert process finished for elephant ${elephantKey} at ${distance.toFixed(1)}km`);
   } catch (error) {
-    console.error('❌ Error sending proximity alert:', error);
-    console.error('Error details:', error);
+    console.error('❌ Error sending elephant alert:', error);
+    // Fallback to local notification only
+    showNotification('🚨 Elephant Within Perimeter', 'Elephant Within Perimeter. Seek Shelter and Stay Safe!', '🐘', `elephant-${elephantKey}`);
   }
 }
 
