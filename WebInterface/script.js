@@ -299,6 +299,7 @@ function fetchElephants() {
 
       if (snapshot.exists()) {
         const elephants = snapshot.val();
+        const elephantKeys = Object.keys(elephants);
 
         // Clear existing options
         select.innerHTML = '';
@@ -310,12 +311,20 @@ function fetchElephants() {
         select.appendChild(defaultOption);
 
         // Loop through the elephants and create options for each
-        Object.keys(elephants).forEach((elephantKey) => {
+        elephantKeys.forEach((elephantKey) => {
           const option = document.createElement('option');
           option.value = elephantKey;
           option.textContent = elephantKey.toUpperCase();
           select.appendChild(option);
         });
+
+        // Automatically select and load the first elephant
+        if (elephantKeys.length > 0) {
+          const firstElephant = elephantKeys[0];
+          select.value = firstElephant;
+          console.log(`Auto-loading first elephant: ${firstElephant}`);
+          loadLiveLocation(firstElephant);
+        }
       } else {
         console.error('No elephants found in Firebase.');
       }
@@ -332,12 +341,30 @@ function getLatestLocation(locations) {
   let latestLocation = null;
   let latestTimestamp = 0;
 
-  Object.values(locations).forEach(location => {
-    if (location.timestamp && location.latitude && location.longitude) {
-      const timestamp = new Date(location.timestamp).getTime();
-      if (timestamp > latestTimestamp) {
-        latestTimestamp = timestamp;
-        latestLocation = location;
+  Object.values(locations).forEach(locationData => {
+    let location = locationData;
+
+    // Check if data is nested in uplink_message.decoded_payload
+    if (locationData.uplink_message && locationData.uplink_message.decoded_payload) {
+      location = locationData.uplink_message.decoded_payload;
+    }
+
+    // Check various possible structures
+    const lat = location.latitude || location.lat;
+    const lng = location.longitude || location.lng;
+    const timestamp = location.timestamp;
+    const alertType = location.alert_type || 'routine_update'; // Get alert_type
+
+    if (timestamp && lat && lng) {
+      const ts = new Date(timestamp).getTime();
+      if (ts > latestTimestamp) {
+        latestTimestamp = ts;
+        latestLocation = {
+          latitude: parseFloat(typeof lat === 'string' ? lat.replace(/"/g, '') : lat),
+          longitude: parseFloat(typeof lng === 'string' ? lng.replace(/"/g, '') : lng),
+          timestamp: timestamp,
+          alert_type: alertType
+        };
       }
     }
   });
@@ -346,29 +373,85 @@ function getLatestLocation(locations) {
 }
 
 function loadLiveLocation(elephantKey) {
-  database.ref(`elephants/${elephantKey}/locations`).once('value')
-    .then((snapshot) => {
-      const locations = snapshot.val();
-      console.log(locations)
+  console.log(`🔍 Loading location for: ${elephantKey}`);
 
-      const latestLocation = getLatestLocation(locations);
+  database.ref(`elephants/${elephantKey}`).once('value')
+    .then((snapshot) => {
+      const elephant = snapshot.val();
+      console.log('📊 Full elephant data:', elephant);
+
+      if (!elephant) {
+        console.error(`❌ No data found for ${elephantKey}`);
+        return;
+      }
+
+      let latestLocation = null;
+
+      // Try to get from locations array first
+      if (elephant.locations) {
+        console.log('📍 Found locations array:', elephant.locations);
+        latestLocation = getLatestLocation(elephant.locations);
+        console.log('📍 Latest location from array:', latestLocation);
+      }
+
+      // Fallback to old livelocation format
+      if (!latestLocation && elephant.livelocation) {
+        console.log('📍 Using old livelocation format:', elephant.livelocation);
+        latestLocation = {
+          latitude: elephant.livelocation.lat,
+          longitude: elephant.livelocation.lng,
+          timestamp: elephant.livelocation.timestamp || new Date().toISOString()
+        };
+      }
 
       if (latestLocation && latestLocation.latitude && latestLocation.longitude) {
         const lat = parseFloat(latestLocation.latitude);
         const lng = parseFloat(latestLocation.longitude);
+        const alertType = latestLocation.alert_type || 'routine_update';
+
+        console.log(`✅ Displaying marker at: ${lat}, ${lng}, alert_type: ${alertType}`);
+
+        // Check if elephant is running - show alert
+        if (alertType === 'running_detected') {
+          console.log(`🏃 RUNNING DETECTED for ${elephantKey}!`);
+          showRunningAlert(elephantKey, { lat, lng }, latestLocation.timestamp);
+        }
 
         // Update map view to the live location
         map.setView([lat, lng], 13);
 
-        // Add a marker to the live location
-        const marker = L.marker([lat, lng]).addTo(map);
-        marker.bindPopup(`<b>${elephantKey.toUpperCase()}</b><br>Lat: ${lat} <br> Lon: ${lng}<br>Updated: ${new Date(latestLocation.timestamp).toLocaleString()}`).openPopup();
+        // Remove existing markers
+        map.eachLayer((layer) => {
+          if (layer instanceof L.Marker) {
+            map.removeLayer(layer);
+          }
+        });
+
+        // Add a marker with different color based on alert type
+        const markerColor = alertType === 'running_detected'
+          ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png'
+          : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png';
+
+        const marker = L.marker([lat, lng], {
+          icon: L.icon({
+            iconUrl: markerColor,
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+          })
+        }).addTo(map);
+
+        const statusEmoji = alertType === 'running_detected' ? '🏃 RUNNING' : '🚶 Normal';
+        marker.bindPopup(`<b>${elephantKey.toUpperCase()}</b><br>Status: ${statusEmoji}<br>Lat: ${lat.toFixed(6)} <br> Lon: ${lng.toFixed(6)}<br>Updated: ${new Date(latestLocation.timestamp).toLocaleString()}`).openPopup();
       } else {
-        console.log(`No live location found for ${elephantKey.toUpperCase()}`);
+        console.error(`❌ No valid location found for ${elephantKey}`);
+        console.log('Available data:', { locations: elephant.locations, livelocation: elephant.livelocation });
       }
     })
     .catch((error) => {
-      console.error('Error loading live location for elephant:', error);
+      console.error('❌ Error loading live location for elephant:', error);
     });
 }
 
@@ -456,6 +539,71 @@ function isPointInPolygon(point, polygon) {
   return inside;
 }
 
+// Show running alert for elephants
+function showRunningAlert(elephantId, location, timestamp) {
+  const alertCard = document.getElementById('alertCard');
+  const alertTitle = document.getElementById('alertTitle');
+  const alertMessage = document.getElementById('alertMessage');
+  const alertLocation = document.getElementById('alertLocation');
+  const alertTime = document.getElementById('alertTime');
+  const alertIcon = document.getElementById('alertIcon');
+
+  // Store alert data for map navigation
+  currentAlertData = {
+    elephantId: elephantId,
+    location: location
+  };
+
+  // Configure running alert
+  alertCard.className = 'alert-card breach'; // Use breach styling (orange/red)
+  if (alertIcon) alertIcon.className = 'fas fa-person-running';
+  alertTitle.textContent = 'RUNNING DETECTED';
+  alertMessage.textContent = `${elephantId.toUpperCase()} is running! Possible agitation or threat nearby.`;
+
+  // Update location and time
+  alertLocation.textContent = `Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+  alertTime.textContent = `Time: ${new Date(timestamp).toLocaleTimeString()}`;
+
+  // Show the alert card
+  alertCard.classList.remove('hidden');
+
+  // Play alert sound
+  playAlertSound();
+
+  // Send push notification to rangers
+  sendRunningAlertNotification(elephantId, location);
+
+  // Log to Firebase
+  database.ref('running_alerts').push({
+    elephant_id: elephantId,
+    location: location,
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+    detected_at: timestamp
+  });
+}
+
+// Send push notification for running detection
+async function sendRunningAlertNotification(elephantId, location) {
+  try {
+    const response = await fetch(`${PUSH_BACKEND_URL}/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: `🏃 RUNNING DETECTED: ${elephantId.toUpperCase()}`,
+        body: `${elephantId.toUpperCase()} is running! Possible agitation or threat. Check dashboard immediately.`
+      })
+    });
+
+    if (response.ok) {
+      console.log(`✅ Running alert sent for ${elephantId}`);
+    }
+  } catch (error) {
+    console.error('❌ Error sending running alert:', error);
+  }
+}
+
 // Show floating alert card on dashboard
 function showAlertCard(elephantId, alertType, elephantLocation) {
   const alertCard = document.getElementById('alertCard');
@@ -463,6 +611,7 @@ function showAlertCard(elephantId, alertType, elephantLocation) {
   const alertMessage = document.getElementById('alertMessage');
   const alertLocation = document.getElementById('alertLocation');
   const alertTime = document.getElementById('alertTime');
+  const alertIcon = document.getElementById('alertIcon');
 
   // Store alert data for map navigation
   currentAlertData = {
@@ -473,12 +622,14 @@ function showAlertCard(elephantId, alertType, elephantLocation) {
   // Configure alert based on type
   if (alertType === 'breach') {
     alertCard.className = 'alert-card breach';
-    alertTitle.innerHTML = '<i class="fas fa-exclamation-triangle"></i> GEOFENCE BREACH';
-    alertMessage.textContent = `${elephantId} has crossed the geofence boundary! Immediate action required.`;
+    if (alertIcon) alertIcon.className = 'fas fa-elephant';
+    alertTitle.textContent = 'GEOFENCE BREACH';
+    alertMessage.textContent = `${elephantId.toUpperCase()} has crossed the geofence boundary! Immediate action required.`;
   } else {
     alertCard.className = 'alert-card return';
-    alertTitle.innerHTML = '<i class="fas fa-check-circle"></i> GEOFENCE RE-ENTRY';
-    alertMessage.textContent = `${elephantId} has returned inside the geofence boundary.`;
+    if (alertIcon) alertIcon.className = 'fas fa-check-circle';
+    alertTitle.textContent = 'GEOFENCE RE-ENTRY';
+    alertMessage.textContent = `${elephantId.toUpperCase()} has returned inside the geofence boundary.`;
   }
 
   // Update location and time
@@ -664,6 +815,8 @@ function startGeofenceMonitoring() {
       const breachKey = `${elephantKey}_breach`;
       const previousState = geofenceBreaches.get(breachKey);
 
+      console.log(`🔍 Geofence check for ${elephantKey}: Inside=${isInside}, PreviousState=${previousState}, Location:`, latestLocation);
+
       // Detect geofence breach (was inside, now outside)
       if (previousState === true && !isInside) {
         console.log(`🚨 GEOFENCE BREACH DETECTED: ${elephantKey}`);
@@ -676,10 +829,59 @@ function startGeofenceMonitoring() {
         await sendGeofenceAlert(elephantKey, 'return', elephant.geofence, latestLocation);
         geofenceBreaches.set(breachKey, true);
       }
-      // First time check - set initial state
+      // First time check - set initial state AND alert if outside
       else if (previousState === undefined) {
         geofenceBreaches.set(breachKey, isInside);
         console.log(`📍 Initial geofence state for ${elephantKey}: ${isInside ? 'Inside' : 'Outside'}`);
+
+        // If elephant is outside on first check, send breach alert
+        if (!isInside) {
+          console.log(`🚨 INITIAL BREACH: ${elephantKey} is outside geofence!`);
+          await sendGeofenceAlert(elephantKey, 'breach', elephant.geofence, latestLocation);
+        }
+      }
+    });
+  });
+}
+
+// Monitor elephant locations for running detection
+function startRunningDetectionMonitoring() {
+  console.log('🏃 Starting running detection monitoring...');
+
+  // Track last alert time to prevent spam
+  const lastRunningAlert = new Map();
+
+  database.ref('elephants').on('value', (elephantsSnapshot) => {
+    const elephants = elephantsSnapshot.val();
+    if (!elephants) return;
+
+    Object.keys(elephants).forEach((elephantKey) => {
+      const elephant = elephants[elephantKey];
+
+      // Get latest location
+      let latestLocation = null;
+      if (elephant.locations) {
+        latestLocation = getLatestLocation(elephant.locations);
+      }
+
+      if (!latestLocation || !latestLocation.alert_type) return;
+
+      // Check if running detected
+      if (latestLocation.alert_type === 'running_detected') {
+        const lastAlert = lastRunningAlert.get(elephantKey);
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        // Only alert if no alert in last 5 minutes
+        if (!lastAlert || (now - lastAlert) > fiveMinutes) {
+          console.log(`🏃 Running detected for ${elephantKey}`);
+          showRunningAlert(elephantKey, {
+            lat: latestLocation.latitude,
+            lng: latestLocation.longitude
+          }, latestLocation.timestamp);
+
+          lastRunningAlert.set(elephantKey, now);
+        }
       }
     });
   });
@@ -692,14 +894,26 @@ function getLatestLocationFromArray(locations) {
   let latestLocation = null;
   let latestTimestamp = 0;
 
-  Object.values(locations).forEach(location => {
-    if (location.timestamp && location.latitude && location.longitude) {
-      const timestamp = new Date(location.timestamp).getTime();
-      if (timestamp > latestTimestamp) {
-        latestTimestamp = timestamp;
+  Object.values(locations).forEach(locationData => {
+    let location = locationData;
+
+    // Check if data is nested in uplink_message.decoded_payload
+    if (locationData.uplink_message && locationData.uplink_message.decoded_payload) {
+      location = locationData.uplink_message.decoded_payload;
+    }
+
+    // Check various possible structures
+    const lat = location.latitude || location.lat;
+    const lng = location.longitude || location.lng;
+    const timestamp = location.timestamp;
+
+    if (timestamp && lat && lng) {
+      const ts = new Date(timestamp).getTime();
+      if (ts > latestTimestamp) {
+        latestTimestamp = ts;
         latestLocation = {
-          lat: parseFloat(location.latitude),
-          lng: parseFloat(location.longitude)
+          lat: parseFloat(typeof lat === 'string' ? lat.replace(/"/g, '') : lat),
+          lng: parseFloat(typeof lng === 'string' ? lng.replace(/"/g, '') : lng)
         };
       }
     }
@@ -725,6 +939,10 @@ window.onload = function () {
   // Start geofence monitoring system
   startGeofenceMonitoring();
   console.log('✅ Geofence monitoring system activated');
+
+  // Start running detection monitoring
+  startRunningDetectionMonitoring();
+  console.log('✅ Running detection monitoring activated');
 
   // Set up periodic session check (every 5 minutes)
   setInterval(() => {

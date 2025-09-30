@@ -63,7 +63,7 @@ body {
     background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
 }
 
-.alert-header i.fa-exclamation-triangle {
+.alert-header i.fa-elephant {
     font-size: 24px;
     animation: pulse 2s infinite;
 }
