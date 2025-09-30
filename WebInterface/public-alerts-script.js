@@ -719,17 +719,18 @@ testNotificationBtn.addEventListener('click', async () => {
 
   console.log('🔔 Showing test notification...');
 
-  // Show test notification
+  // Show test notification with the exact elephant alert message
   showNotification(
-    '🧪 Test Notification',
-    'This is a test elephant alert notification. Your alerts are working correctly!',
+    '🚨 Elephant Within Perimeter',
+    'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
     '🐘',
-    'test-alert'
+    'test-elephant-alert'
   );
 
   // Also show success message in UI
   setTimeout(() => {
     console.log('✅ Test notification sent');
+    alert('Test notification sent! Check your notification panel if you don\'t see it immediately.');
   }, 1000);
 });
 
@@ -872,6 +873,21 @@ window.TrunkLinkAlerts = {
       livelocation: { lat: userLocation.latitude, lng: userLocation.longitude }
     };
     sendProximityAlert(elephantKey, mockElephantData, distance);
+  },
+  // Debug notification system
+  debugNotifications: () => {
+    const debug = {
+      notificationSupport: 'Notification' in window,
+      permission: Notification.permission,
+      userAgent: navigator.userAgent,
+      isSecureContext: window.isSecureContext,
+      protocol: window.location.protocol,
+      serviceWorkerSupport: 'serviceWorker' in navigator,
+      userLocation: !!userLocation,
+      subscriptionId: !!subscriptionId
+    };
+    console.table(debug);
+    return debug;
   },
   // Test proximity monitoring manually
   testProximityAlert: (distance = 3) => {
