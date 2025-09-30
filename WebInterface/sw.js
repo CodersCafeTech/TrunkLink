@@ -249,28 +249,38 @@ async function sendProximityNotification(elephantKey, elephantData, distance, us
   }
 
   const isCritical = distance < 2;
-  const title = isCritical ? '🚨 CRITICAL: Elephant Very Close!' : '⚠️ Elephant Alert';
-  const body = `Elephant detected ${distance.toFixed(1)}km from your location. ${
-    isCritical ? 'Seek safe shelter immediately!' : 'Exercise caution and avoid the area.'
-  }`;
+  const title = '🚨 Elephant Within Perimeter';
+  const body = 'Elephant Within Perimeter. Seek Shelter and Stay Safe!';
 
-  // Send notification
+  // Send notification with permanent settings
   await self.registration.showNotification(title, {
     body: body,
     icon: '/icons/elephant-icon-192.png',
     badge: '/icons/elephant-badge-72.png',
-    vibrate: isCritical ? [500, 200, 500, 200, 500] : [200, 100, 200],
-    requireInteraction: isCritical,
+    vibrate: [500, 200, 500, 200, 500], // Strong vibration for elephant alerts
+    requireInteraction: true, // Make all elephant notifications permanent
     persistent: true,
     tag: `elephant-${elephantKey}`,
     renotify: true,
+    actions: [
+      {
+        action: 'view',
+        title: '📍 View Location',
+        icon: '/icons/view-icon.png'
+      },
+      {
+        action: 'safe',
+        title: '✅ I Am Safe',
+        icon: '/icons/safe-icon.png'
+      }
+    ],
     data: {
       elephantId: elephantKey,
       distance: distance,
       timestamp: now,
       userLocation: userData.location,
       elephantLocation: elephantData.livelocation,
-      isCritical: isCritical
+      isCritical: true // Mark all elephant alerts as critical for permanent display
     }
   });
 

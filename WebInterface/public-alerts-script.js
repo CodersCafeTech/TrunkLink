@@ -91,16 +91,19 @@ function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
   // Check permission status
   if (Notification.permission === 'granted') {
     try {
-      // Create notification with Android-optimized settings
+      // Determine if this is an elephant alert notification
+      const isElephantAlert = title.includes('Elephant') || title.includes('CRITICAL') || tag.includes('elephant');
+
+      // Create notification with permanent settings for elephant alerts
       const notification = new Notification(title, {
         body: body,
         icon: icon,
         tag: tag,
-        requireInteraction: false, // Changed for Android compatibility
-        vibrate: [200, 100, 200], // Vibration pattern for mobile
+        requireInteraction: isElephantAlert, // Make elephant alerts persistent
+        vibrate: isElephantAlert ? [500, 200, 500, 200, 500] : [200, 100, 200], // Strong vibration for elephant alerts
         timestamp: Date.now(),
         silent: false,
-        // Remove actions for Android compatibility
+        // Add actions for better interaction
         ...(!/Android/i.test(navigator.userAgent) && {
           actions: [
             {
@@ -109,7 +112,7 @@ function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
             },
             {
               action: 'dismiss',
-              title: 'Dismiss'
+              title: 'I Am Safe'
             }
           ]
         })
@@ -118,7 +121,10 @@ function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
       notification.onclick = function() {
         console.log('📱 Notification clicked');
         window.focus();
-        notification.close();
+        // Only auto-close if not an elephant alert
+        if (!isElephantAlert) {
+          notification.close();
+        }
       };
 
       notification.onerror = function(error) {
@@ -129,8 +135,8 @@ function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
         console.log('✅ Notification shown successfully');
       };
 
-      // Auto-close after 30 seconds for non-critical alerts
-      if (!title.includes('CRITICAL')) {
+      // Only auto-close for non-elephant alerts
+      if (!isElephantAlert && !title.includes('Test')) {
         setTimeout(() => {
           notification.close();
         }, 30000);
@@ -140,7 +146,7 @@ function showNotification(title, body, icon = '🐘', tag = 'elephant-alert') {
     } catch (error) {
       console.error('❌ Failed to create notification:', error);
       // Fallback to alert for critical notifications
-      if (title.includes('CRITICAL') || title.includes('Test')) {
+      if (title.includes('CRITICAL') || title.includes('Test') || title.includes('Elephant')) {
         alert(`${title}\n${body}`);
       }
     }
@@ -565,9 +571,9 @@ async function sendProximityAlert(elephantKey, elephantData, distance) {
     await database.ref('proximity_alerts/' + alertKey).set(alertData);
     console.log('✅ Alert saved to database successfully');
 
-    // Send web notification
-    const title = distance < 2 ? '🚨 CRITICAL: Elephant Very Close!' : '⚠️ Elephant Alert';
-    const body = `Elephant detected ${distance.toFixed(1)}km from your location. ${distance < 2 ? 'Seek safe shelter immediately!' : 'Exercise caution and avoid the area.'}`;
+    // Send web notification with your requested message
+    const title = '🚨 Elephant Within Perimeter';
+    const body = 'Elephant Within Perimeter. Seek Shelter and Stay Safe!';
 
     console.log('📢 Preparing notification:', { title, body, notificationPermission });
 
