@@ -53,15 +53,16 @@ let db = null;
 let firebaseEnabled = false;
 
 try {
-  // For now, initialize with project ID only for basic access
+  // Initialize with minimal config for public database access
   if (!admin.apps.length) {
     admin.initializeApp({
-      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://geofence-5bdcc-default-rtdb.firebaseio.com"
+      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://geofence-5bdcc-default-rtdb.firebaseio.com",
+      projectId: process.env.FIREBASE_PROJECT_ID || "geofence-5bdcc"
     });
   }
   db = admin.database();
   firebaseEnabled = true;
-  console.log('✅ Firebase Admin initialized successfully');
+  console.log('✅ Firebase Admin initialized for public database');
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error.message);
   console.log('🔧 Running without Firebase - using in-memory storage');
