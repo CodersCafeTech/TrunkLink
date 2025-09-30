@@ -745,6 +745,8 @@ function initializeFormHandling() {
   subscriptionForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  console.log('🚀 Form submitted - starting subscription process...');
+
   // Location check disabled for testing
   // if (!userLocation) {
   //   alert('Please grant location access before subscribing.');
@@ -821,46 +823,19 @@ function initializeFormHandling() {
     }, 3000);
 
   } catch (error) {
-    console.error('Subscription failed:', error);
-
-    // Provide more specific error messages with Android-specific handling
-    let errorMessage = 'Subscription failed. Please try again.';
-
-    // Check for Android Chrome specific issues
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isChrome = /Chrome/i.test(navigator.userAgent);
-
-    if (error.code === 'PERMISSION_DENIED' || error.message.includes('permission')) {
-      if (isAndroid) {
-        errorMessage = 'Notification permission denied. Please enable notifications in your browser settings.';
-      } else {
-        errorMessage = 'Access denied. Please check your internet connection and try again.';
-      }
-    } else if (error.code === 'NETWORK_ERROR' || error.message.includes('network')) {
-      errorMessage = 'Network error. Please check your internet connection and try again.';
-    } else if (error.message.includes('Firebase')) {
-      errorMessage = 'Database connection failed. Please try again later.';
-    } else if (error.message.includes('permission') || error.message.includes('denied')) {
-      errorMessage = 'Database permission error. Please contact support if this persists.';
-    } else if (error.message) {
-      errorMessage = `Subscription failed: ${error.message}`;
-    }
-
-    // Add device info for debugging
-    if (isAndroid) {
-      errorMessage += ` (Android device detected - ${isChrome ? 'Chrome' : 'Other browser'})`;
-    }
-
-    alert(errorMessage);
-
-    // Log detailed error for debugging
-    console.error('Detailed error info:', {
+    console.error('❌ Subscription failed:', error);
+    console.error('Error details:', {
       code: error.code,
       message: error.message,
-      details: error,
+      stack: error.stack,
       userLocation: !!userLocation,
-      subscriptionId: subscriptionId
+      subscriptionId: subscriptionId,
+      notificationPermission: Notification.permission,
+      serviceWorkerSupport: 'serviceWorker' in navigator
     });
+
+    // Alert the error instead of showing UI message
+    alert(`Subscription Error:\n\nError: ${error.message}\nCode: ${error.code || 'N/A'}\n\nCheck console for full details.`);
   } finally {
     // Reset loading state
     if (subscribeBtn) subscribeBtn.disabled = false;
