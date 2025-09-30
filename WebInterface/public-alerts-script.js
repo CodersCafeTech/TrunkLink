@@ -538,8 +538,27 @@ async function subscribeToAlerts(formData) {
       email: formData.email ? formData.email.trim() : null
     };
 
-    const backendResult = await sendSubscriptionToBackend(pushSubscription, userInfo, userLocation);
-    subscriptionId = backendResult.subscriptionId;
+    // Subscribe to Push system
+    await sendSubscriptionToBackend(pushSubscription, userInfo, userLocation);
+
+    // Also store in Firebase for elephant monitoring
+    subscriptionId = 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+    const subscriptionData = {
+      id: subscriptionId,
+      name: userInfo.name,
+      phone: userInfo.phone || '',
+      email: userInfo.email || '',
+      location: userLocation,
+      pushSubscription: pushSubscription,
+      status: 'active',
+      subscribed_at: firebase.database.ServerValue.TIMESTAMP,
+      last_updated: firebase.database.ServerValue.TIMESTAMP,
+      user_agent: navigator.userAgent,
+      ip_address: 'web'
+    };
+
+    await database.ref('public_subscribers/' + subscriptionId).set(subscriptionData);
 
     console.log('Subscription created with backend:', subscriptionId);
 
