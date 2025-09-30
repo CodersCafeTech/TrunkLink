@@ -34,16 +34,9 @@ let locationWatchId = null;
 let notificationPermission = false;
 let subscriptionId = null;
 
-// DOM Elements
-const subscriptionForm = document.getElementById('subscriptionForm');
-const requestLocationBtn = document.getElementById('requestLocationBtn');
-const locationStatus = document.getElementById('locationStatus');
-const subscribeBtn = document.getElementById('subscribeBtn');
-const subscribeText = document.getElementById('subscribeText');
-const subscribeSpinner = document.getElementById('subscribeSpinner');
-const successMessage = document.getElementById('successMessage');
-const testNotificationBtn = document.getElementById('testNotificationBtn');
-const manageSubscriptionBtn = document.getElementById('manageSubscriptionBtn');
+// DOM Elements (will be initialized after DOM loads)
+let subscriptionForm, requestLocationBtn, locationStatus, subscribeBtn;
+let subscribeText, subscribeSpinner, successMessage, testNotificationBtn, manageSubscriptionBtn;
 
 // Utility Functions
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -64,6 +57,8 @@ function generateSubscriptionId() {
 }
 
 function showLocationStatus(message, type = 'info') {
+  if (!locationStatus) return;
+
   const colors = {
     success: 'text-green-600',
     error: 'text-red-600',
@@ -443,7 +438,7 @@ async function requestNotificationPermission() {
 }
 
 // VAPID public key from working Push system
-const VAPID_PUBLIC_KEY = 'BAVqYcw91jG8w7OL3x4VgSf0b_GAxY4kSG53IxBRT-MvYQ2M3DO1Wu_mlCQw2vnFUrHqicpf5sVzbN1Pf0IMWUU';
+const VAPID_PUBLIC_KEY = 'BFtX42XNx31EmwuVegKXPhX6bW8AiVOEACYRmB6Lz1-uAAee7IIF5YXX8e7U4fNzYe6x2GNkP8YYPq9sdyXVu10';
 
 // Backend API configuration - using working Push system
 const BACKEND_URL = 'https://push-ej51.onrender.com'; // Your working Push backend
@@ -451,6 +446,11 @@ const BACKEND_URL = 'https://push-ej51.onrender.com'; // Your working Push backe
 // Subscribe to push notifications
 async function subscribeToPush() {
   try {
+    // Check if service worker is supported
+    if (!('serviceWorker' in navigator)) {
+      throw new Error('Service Worker not supported in this browser');
+    }
+
     const registration = await navigator.serviceWorker.ready;
 
     const subscription = await registration.pushManager.subscribe({
@@ -520,12 +520,21 @@ function urlBase64ToUint8Array(base64String) {
 async function subscribeToAlerts(formData) {
   try {
     // Validate required data
-    if (!userLocation) {
-      throw new Error('Location access is required for subscription');
-    }
+    // Location check disabled for testing
+    // if (!userLocation) {
+    //   throw new Error('Location access is required for subscription');
+    // }
 
     if (!formData.fullName || !formData.phoneNumber) {
       throw new Error('Full name and phone number are required');
+    }
+
+    // Check if service worker is supported (required for push notifications)
+    if (!('serviceWorker' in navigator)) {
+      const isSecure = window.isSecureContext;
+      const protocol = window.location.protocol;
+      alert(`Push notifications require HTTPS.\n\nCurrent: ${protocol}\nSecure Context: ${isSecure}\n\nTo fix:\n• Access via HTTPS\n• Use ngrok or similar tool\n• Deploy to a hosting service with SSL`);
+      throw new Error('Service Worker requires HTTPS');
     }
 
     // Subscribe to push notifications
@@ -549,7 +558,7 @@ async function subscribeToAlerts(formData) {
       name: userInfo.name,
       phone: userInfo.phone || '',
       email: userInfo.email || '',
-      location: userLocation,
+      location: userLocation || null,
       pushSubscription: pushSubscription,
       status: 'active',
       subscribed_at: firebase.database.ServerValue.TIMESTAMP,
@@ -565,8 +574,8 @@ async function subscribeToAlerts(formData) {
     // Store subscription ID locally
     localStorage.setItem('trunklink_subscription_id', subscriptionId);
 
-    // Start proximity monitoring
-    startProximityMonitoring();
+    // Start proximity monitoring (disabled without location)
+    // startProximityMonitoring();
 
     return true;
   } catch (error) {
@@ -657,7 +666,7 @@ function startProximityMonitoring() {
           console.log(`📏 Distance to ${elephantKey}: ${distance.toFixed(2)}km`);
 
           // Check if elephant is within 5km
-          if (distance <= 300) {
+          if (distance <= 5) {
             console.log(`🚨 PROXIMITY ALERT: ${elephantKey} is within 5km (${distance.toFixed(2)}km)`);
 
             // Create a mock livelocation object for compatibility with existing alert system
@@ -690,7 +699,7 @@ function startProximityMonitoring() {
 
           console.log(`📏 Distance to ${elephantKey} (old format): ${distance.toFixed(2)}km`);
 
-          if (distance <= 300) {
+          if (distance <= 5) {
             console.log(`🚨 PROXIMITY ALERT: ${elephantKey} is within 5km (${distance.toFixed(2)}km) - old format`);
             sendProximityAlert(elephantKey, elephant, distance);
           }
@@ -739,14 +748,18 @@ async function sendProximityAlert(elephantKey, elephantData, distance) {
 }
 
 
-// Form Handling
-subscriptionForm.addEventListener('submit', async (e) => {
+// Form Handling (will be attached after DOM loads)
+function initializeFormHandling() {
+  if (!subscriptionForm) return;
+
+  subscriptionForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  if (!userLocation) {
-    alert('Please grant location access before subscribing.');
-    return;
-  }
+  // Location check disabled for testing
+  // if (!userLocation) {
+  //   alert('Please grant location access before subscribing.');
+  //   return;
+  // }
 
   // Request notification permission
   const notificationGranted = await requestNotificationPermission();
@@ -756,27 +769,34 @@ subscriptionForm.addEventListener('submit', async (e) => {
   }
 
   // Show loading state
-  subscribeBtn.disabled = true;
-  subscribeText.classList.add('hidden');
-  subscribeSpinner.classList.remove('hidden');
+  if (subscribeBtn) subscribeBtn.disabled = true;
+  if (subscribeText) subscribeText.classList.add('hidden');
+  if (subscribeSpinner) subscribeSpinner.classList.remove('hidden');
 
   try {
-    // Collect form data
+    // Collect form data with null checks
+    const fullNameEl = document.getElementById('fullName');
+    const phoneNumberEl = document.getElementById('phoneNumber');
+    const emailEl = document.getElementById('email');
+    const webNotificationsEl = document.getElementById('webNotifications');
+    const quietStartEl = document.getElementById('quietStart');
+    const quietEndEl = document.getElementById('quietEnd');
+
     const formData = {
-      fullName: document.getElementById('fullName').value,
-      phoneNumber: document.getElementById('phoneNumber').value,
-      email: document.getElementById('email').value,
-      webNotifications: document.getElementById('webNotifications').checked,
-      quietStart: document.getElementById('quietStart').value,
-      quietEnd: document.getElementById('quietEnd').value
+      fullName: fullNameEl ? fullNameEl.value : '',
+      phoneNumber: phoneNumberEl ? phoneNumberEl.value : '',
+      email: emailEl ? emailEl.value : '',
+      webNotifications: webNotificationsEl ? webNotificationsEl.checked : true,
+      quietStart: quietStartEl ? quietStartEl.value : '22:00',
+      quietEnd: quietEndEl ? quietEndEl.value : '06:00'
     };
 
     // Subscribe to alerts
     await subscribeToAlerts(formData);
 
     // Show success message
-    subscriptionForm.style.display = 'none';
-    successMessage.classList.remove('hidden');
+    if (subscriptionForm) subscriptionForm.style.display = 'none';
+    if (successMessage) successMessage.classList.remove('hidden');
 
     // Send test notification
     setTimeout(() => {
@@ -853,11 +873,12 @@ subscriptionForm.addEventListener('submit', async (e) => {
     });
   } finally {
     // Reset loading state
-    subscribeBtn.disabled = false;
-    subscribeText.classList.remove('hidden');
-    subscribeSpinner.classList.add('hidden');
+    if (subscribeBtn) subscribeBtn.disabled = false;
+    if (subscribeText) subscribeText.classList.remove('hidden');
+    if (subscribeSpinner) subscribeSpinner.classList.add('hidden');
   }
-});
+  });
+}
 
 // Debug function to check DOM elements
 function checkDOMElements() {
@@ -882,32 +903,19 @@ function checkDOMElements() {
   return elements;
 }
 
-// Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('📄 DOM Content Loaded - checking elements...');
-  checkDOMElements();
-});
+// Event Listeners will be initialized in main DOMContentLoaded
 
-// Add event listener with null check
-if (requestLocationBtn) {
-  requestLocationBtn.addEventListener('click', requestLocationPermission);
-  console.log('✅ Location button event listener added');
-} else {
-  console.error('❌ requestLocationBtn not found - will retry after DOM load');
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('requestLocationBtn');
-    if (btn) {
-      btn.addEventListener('click', requestLocationPermission);
-      console.log('✅ Location button event listener added after DOM load');
-    } else {
-      console.error('❌ requestLocationBtn still not found after DOM load');
-    }
-  });
-}
+// Initialize event listeners
+function initializeEventListeners() {
+  // Location button
+  if (requestLocationBtn) {
+    requestLocationBtn.addEventListener('click', requestLocationPermission);
+    console.log('✅ Location button event listener added');
+  }
 
-// Add test notification event listener with null check
-if (testNotificationBtn) {
-  testNotificationBtn.addEventListener('click', async () => {
+  // Test notification button
+  if (testNotificationBtn) {
+    testNotificationBtn.addEventListener('click', async () => {
     console.log('🧪 Test system notification button clicked');
 
   // Check notification permission first
@@ -950,47 +958,16 @@ if (testNotificationBtn) {
     console.error('❌ Test notification failed:', error);
     alert('Test notification failed. Please check browser console for details.');
   }
-  });
-} else {
-  console.error('❌ testNotificationBtn not found');
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('testNotificationBtn');
-    if (btn) {
-      btn.addEventListener('click', async () => {
-        // Same test notification logic here...
-        console.log('🧪 Test system notification button clicked (DOM loaded)');
+    });
+  }
 
-        if (Notification.permission !== 'granted') {
-          const granted = await requestNotificationPermission();
-          if (!granted) {
-            alert('Please enable notifications in your browser settings to receive alerts.');
-            return;
-          }
-        }
-
-        try {
-          await triggerSystemNotification({
-            title: '🚨 Elephant Within Perimeter (System Test)',
-            body: 'Elephant Within Perimeter. Seek Shelter and Stay Safe!',
-            elephantId: 'test-elephant',
-            distance: 2.5,
-            userLocation: userLocation
-          });
-
-          alert('System notification test sent!');
-        } catch (error) {
-          console.error('❌ Test notification failed:', error);
-          alert('Test notification failed. Please check browser console for details.');
-        }
-      });
-    }
-  });
+  // Manage subscription button
+  if (manageSubscriptionBtn) {
+    manageSubscriptionBtn.addEventListener('click', () => {
+      alert('Subscription management interface will be available soon. For now, contact support to modify your subscription.');
+    });
+  }
 }
-
-manageSubscriptionBtn.addEventListener('click', () => {
-  // This would open a subscription management interface
-  alert('Subscription management interface will be available soon. For now, contact support to modify your subscription.');
-});
 
 // Register Service Worker for background functionality
 if ('serviceWorker' in navigator) {
@@ -1033,6 +1010,21 @@ async function testFirebaseRules() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize DOM elements
+  subscriptionForm = document.getElementById('subscriptionForm');
+  requestLocationBtn = document.getElementById('requestLocationBtn');
+  locationStatus = document.getElementById('locationStatus');
+  subscribeBtn = document.getElementById('subscribeBtn');
+  subscribeText = document.getElementById('subscribeText');
+  subscribeSpinner = document.getElementById('subscribeSpinner');
+  successMessage = document.getElementById('successMessage');
+  testNotificationBtn = document.getElementById('testNotificationBtn');
+  manageSubscriptionBtn = document.getElementById('manageSubscriptionBtn');
+
+  // Initialize form handling and event listeners
+  initializeFormHandling();
+  initializeEventListeners();
+
   // Check if user is already subscribed
   const existingSubscriptionId = localStorage.getItem('trunklink_subscription_id');
 
@@ -1044,8 +1036,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       .then((snapshot) => {
         if (snapshot.exists()) {
           // User is already subscribed
-          subscriptionForm.style.display = 'none';
-          successMessage.classList.remove('hidden');
+          if (subscriptionForm) subscriptionForm.style.display = 'none';
+          if (successMessage) successMessage.classList.remove('hidden');
 
           // Start monitoring
           if (userLocation) {
@@ -1094,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Check if geolocation is supported
   if (!navigator.geolocation) {
     showLocationStatus('Geolocation is not supported by this browser', 'error');
-    requestLocationBtn.disabled = true;
+    if (requestLocationBtn) requestLocationBtn.disabled = true;
   }
 });
 
