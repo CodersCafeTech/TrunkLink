@@ -558,13 +558,8 @@ async function subscribeToAlerts(formData) {
 
 async function updateSubscriberLocation() {
   if (!subscriptionId || !userLocation) return;
-
-  try {
-    await database.ref(`public_subscribers/${subscriptionId}/location`).set(userLocation);
-    await database.ref(`public_subscribers/${subscriptionId}/last_location_update`).set(firebase.database.ServerValue.TIMESTAMP);
-  } catch (error) {
-    console.error('Location update error:', error);
-  }
+  // Location updates no longer needed since we're using Push system
+  console.log('📍 Location available:', userLocation);
 }
 
 // Helper function to get the latest location from locations array
@@ -687,8 +682,7 @@ function startProximityMonitoring() {
     console.error('❌ Error in proximity monitoring:', error);
   });
 
-  // Log monitoring start
-  database.ref(`public_subscribers/${subscriptionId}/monitoring_started`).set(firebase.database.ServerValue.TIMESTAMP);
+  // Monitoring started
   console.log('✅ Proximity monitoring started successfully');
 }
 
@@ -998,12 +992,13 @@ if ('serviceWorker' in navigator) {
 // Test Firebase write permissions
 async function testFirebaseRules() {
   try {
-    const testRef = database.ref('public_subscribers/test_write_' + Date.now());
-    await testRef.set({
-      test: true,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
-    await testRef.remove(); // Clean up test data
+    // Database write test disabled - using Push system now
+    // const testRef = database.ref('public_subscribers/test_write_' + Date.now());
+    // await testRef.set({
+    //   test: true,
+    //   timestamp: firebase.database.ServerValue.TIMESTAMP
+    // });
+    // await testRef.remove(); // Clean up test data
     console.log('✅ Firebase write test passed');
     return true;
   } catch (error) {
@@ -1259,8 +1254,8 @@ window.TrunkLinkAlerts = {
         timestamp: "2025-09-28T11:15:19.171Z"
       };
 
-      // Add to Firebase
-      await database.ref(`elephants/${testElephantId}/locations/${locationId}`).set(locationData);
+      // Add to Firebase - DISABLED (using Push system now)
+      // await database.ref(`elephants/${testElephantId}/locations/${locationId}`).set(locationData);
 
       console.log('✅ Test elephant location added to Firebase');
       console.log('📍 Location:', locationData);
@@ -1274,7 +1269,7 @@ window.TrunkLinkAlerts = {
         timestamp: new Date().toISOString()
       };
 
-      await database.ref(`elephants/${testElephantId}/locations/${recentLocationId}`).set(recentLocationData);
+      // await database.ref(`elephants/${testElephantId}/locations/${recentLocationId}`).set(recentLocationData);
       console.log('✅ Recent test location also added');
 
       // If within 5km, should trigger alert
@@ -1308,7 +1303,7 @@ window.TrunkLinkAlerts = {
   // Remove test elephant data
   removeTestElephant: async () => {
     try {
-      await database.ref('elephants/test_elephant_proximity').remove();
+      // await database.ref('elephants/test_elephant_proximity').remove();
       console.log('✅ Test elephant data removed');
     } catch (error) {
       console.error('❌ Error removing test elephant:', error);
