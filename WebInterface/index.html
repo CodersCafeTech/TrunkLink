@@ -450,6 +450,30 @@
       .subscription-card::-webkit-scrollbar-thumb:hover {
         background: #15803d;
       }
+
+      /* Ensure checkboxes are always visible */
+      input[type="checkbox"] {
+        appearance: auto !important;
+        -webkit-appearance: checkbox !important;
+        -moz-appearance: checkbox !important;
+        width: 20px !important;
+        height: 20px !important;
+        cursor: pointer !important;
+        accent-color: #16a34a !important;
+        border: 2px solid #16a34a !important;
+        border-radius: 4px !important;
+        background-color: white !important;
+      }
+
+      input[type="checkbox"]:checked {
+        background-color: #16a34a !important;
+        border-color: #16a34a !important;
+      }
+
+      input[type="checkbox"]:focus {
+        outline: 2px solid #16a34a !important;
+        outline-offset: 2px !important;
+      }
     </style>
 </head>
 <body class="forest-bg">
@@ -581,9 +605,9 @@
 
                     <!-- Terms and Conditions -->
                     <div class="text-center">
-                        <label class="inline-flex items-center text-base text-gray-600">
-                            <input type="checkbox" id="termsAccepted" name="termsAccepted" required class="w-4 h-4 text-forest-600 rounded mr-3">
-                            I agree to receive safety alerts
+                        <label class="inline-flex items-center text-base text-gray-600 cursor-pointer">
+                            <input type="checkbox" id="termsAccepted" name="termsAccepted" required style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer; accent-color: #16a34a; border: 2px solid #16a34a;">
+                            <span>I agree to receive safety alerts</span>
                         </label>
                     </div>
 
@@ -750,8 +774,8 @@
                         <!-- Terms and Conditions -->
                         <div class="text-center">
                             <label class="inline-flex items-center text-sm text-gray-600 cursor-pointer">
-                                <input type="checkbox" id="termsAcceptedMobile" name="termsAccepted" required class="w-4 h-4 text-forest-600 rounded mr-2 accent-forest-600">
-                                I agree to receive safety alerts
+                                <input type="checkbox" id="termsAcceptedMobile" name="termsAccepted" required style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer; accent-color: #16a34a; border: 2px solid #16a34a;">
+                                <span>I agree to receive safety alerts</span>
                             </label>
                         </div>
 

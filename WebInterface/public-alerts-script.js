@@ -454,21 +454,47 @@ async function subscribeToPush() {
       throw new Error('Service Worker not supported in this browser');
     }
 
+    console.log('⏳ Waiting for service worker to be ready...');
     const registration = await navigator.serviceWorker.ready;
+    console.log('✅ Service worker ready:', registration);
+
+    // Check if push manager is available
+    if (!registration.pushManager) {
+      throw new Error('Push notifications not supported in this browser');
+    }
+
+    console.log('📱 Attempting to subscribe to push notifications...');
+
+    // First, check if there's an existing subscription
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      console.log('✅ Using existing push subscription');
+      return existingSubscription;
+    }
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
 
-    console.log('Push subscription successful:', subscription);
-    console.log('Subscription object details:', {
-      endpoint: subscription.endpoint,
-      keys: subscription.keys
-    });
+    console.log('✅ Push subscription successful:', subscription);
+    console.log('Subscription endpoint:', subscription.endpoint);
     return subscription;
   } catch (error) {
-    console.error('Failed to subscribe to push notifications:', error);
+    console.error('❌ Failed to subscribe to push notifications:', error);
+    console.error('Error name:', error.name);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+
+    // Provide specific error messages based on error type
+    if (error.name === 'NotAllowedError' || error.code === 20) {
+      throw new Error('Push notification permission denied. Please enable notifications in your browser settings and reload the page.');
+    } else if (error.name === 'NotSupportedError') {
+      throw new Error('Push notifications are not supported in this browser. Please use Chrome, Firefox, or Edge.');
+    } else if (error.message && error.message.includes('HTTPS')) {
+      throw new Error('Push notifications require HTTPS. Please access this page via HTTPS.');
+    }
+
     throw error;
   }
 }
@@ -524,10 +550,9 @@ async function subscribeToAlerts(formData) {
   console.log('🚀 Starting subscription process...');
   try {
     // Validate required data
-    // Location check disabled for testing
-    // if (!userLocation) {
-    //   throw new Error('Location access is required for subscription');
-    // }
+    if (!userLocation) {
+      throw new Error('Location access is required for subscription');
+    }
 
     console.log('📝 Validating form data...', formData);
     if (!formData.fullName || !formData.phoneNumber) {
@@ -567,8 +592,8 @@ async function subscribeToAlerts(formData) {
     // Store subscription ID locally
     localStorage.setItem('trunklink_subscription_id', subscriptionId);
 
-    // Start proximity monitoring (disabled without location)
-    // startProximityMonitoring();
+    // Start proximity monitoring
+    startProximityMonitoring();
 
     return true;
   } catch (error) {
@@ -579,8 +604,7 @@ async function subscribeToAlerts(formData) {
 
 async function updateSubscriberLocation() {
   if (!subscriptionId || !userLocation) return;
-  // Location updates no longer needed since we're using Push system
-  console.log('📍 Location available:', userLocation);
+  console.log('📍 Location updated:', userLocation);
 }
 
 // Helper function to get the latest location from locations array
@@ -762,17 +786,27 @@ async function handleFormSubmit(e) {
   // Determine if this is mobile or desktop form
   const isMobile = e.target.id === 'subscriptionFormMobile';
 
-  // Location check disabled for testing
-  // if (!userLocation) {
-  //   alert('Please grant location access before subscribing.');
-  //   return;
-  // }
+  // Check if location is available
+  if (!userLocation) {
+    alert('Please grant location access before subscribing.');
+    return;
+  }
 
-  // Request notification permission
+  // Request notification permission FIRST
+  console.log('🔔 Checking notification permission...');
+  console.log('Current permission:', Notification.permission);
+
+  if (Notification.permission === 'denied') {
+    alert('Notifications are blocked. Please enable notifications in your browser settings:\n\n1. Click the lock/info icon in the address bar\n2. Find "Notifications" setting\n3. Change to "Allow"\n4. Reload the page');
+    throw new Error('Notification permission denied');
+  }
+
   const notificationGranted = await requestNotificationPermission();
+  console.log('Notification permission granted:', notificationGranted);
+
   if (!notificationGranted) {
-    const proceed = confirm('Notification permission is recommended for timely alerts. Continue anyway?');
-    if (!proceed) return;
+    alert('Notifications are required for elephant alerts. Please enable notifications and try again.');
+    throw new Error('Notification permission not granted');
   }
 
   // Show loading state based on form type
@@ -968,18 +1002,43 @@ function initializeEventListeners() {
 
 // Register Service Worker for background functionality
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // Use relative path for better compatibility with different hosting environments
-    const swPath = './sw.js';
-    navigator.serviceWorker.register(swPath)
-      .then((registration) => {
-        console.log('Service Worker registered successfully:', registration.scope);
-      })
-      .catch((error) => {
-        console.log('Service Worker registration failed:', error);
-        console.error('SW registration error details:', error);
-      });
+  window.addEventListener('load', async () => {
+    try {
+      // Use relative path for better compatibility with different hosting environments
+      const swPath = './sw.js';
+      console.log('🔄 Registering service worker from:', swPath);
+
+      const registration = await navigator.serviceWorker.register(swPath);
+      console.log('✅ Service Worker registered successfully');
+      console.log('   Scope:', registration.scope);
+      console.log('   Active:', !!registration.active);
+      console.log('   Installing:', !!registration.installing);
+      console.log('   Waiting:', !!registration.waiting);
+
+      // Wait for service worker to become active
+      if (registration.installing) {
+        console.log('⏳ Service worker is installing...');
+        registration.installing.addEventListener('statechange', (e) => {
+          console.log('Service worker state changed to:', e.target.state);
+        });
+      }
+
+      // Check service worker readiness
+      await navigator.serviceWorker.ready;
+      console.log('✅ Service worker is ready');
+
+    } catch (error) {
+      console.error('❌ Service Worker registration failed:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+
+      alert(`Service Worker registration failed:\n${error.message}\n\nPush notifications will not work. Please ensure:\n1. You are accessing via HTTPS\n2. Service workers are not blocked in browser settings`);
+    }
   });
+} else {
+  console.error('❌ Service Workers are not supported in this browser');
+  alert('This browser does not support Service Workers, which are required for push notifications.');
 }
 
 // Test Firebase write permissions
