@@ -1,0 +1,92 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>
+        Dashboard
+    </title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Smooch+Sans:wght@100..900&display=swap" rel="stylesheet">
+    <link href="style.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-duotone-thin.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-duotone-solid.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-duotone-regular.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-duotone-light.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-thin.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-solid.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-regular.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/sharp-light.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/duotone-thin.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/duotone-regular.css">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/duotone-light.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-curve@1.0.0/leaflet.curve.min.js"></script>
+
+</head>
+
+<body>
+    <div class="sidebar">
+        <img alt="Logo" height="50"
+            src="https://storage.googleapis.com/a1aa/image/uhjrvGklumpFApbHSEGY9m2GUf5Vx7XxfKo2CwYaH8bKQMIUA.jpg"
+            width="50" />
+        <a class="active" href="#">
+            <i class="fas fa-elephant"></i>
+            Live Location
+        </a>
+        <a href="#" onclick="loadGeofence()">
+            <i class="fas fa-street-view">
+            </i>
+            Load Geofence
+        </a>
+        <a href="#" onclick="saveGeofence()">
+            <i class="fas fa-compass-drafting">
+            </i>
+            Save Geofence
+        </a>
+        <a href="#" onclick="drawSpline()">
+            <i class="fas fa-route" ></i>
+            Location History
+        </a>
+        <div class="logout">
+            <a href="#" onclick="logout()">
+                <i class="fas fa-sign-out-alt">
+                </i>
+                Log out
+            </a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <h1>
+            Dashboard
+        </h1>
+        <div class="dropdown-container">
+            <select id="elephantSelect">
+              <!-- Options will be populated here dynamically -->
+            </select>
+          </div>
+        <div class="neumorphic-card">
+            <div id="map"></div>
+            <div class="coordinates">
+              <pre id="coordinates"></pre>
+            </div>
+
+        </div>
+    </div>
+    </div>
+
+
+    <script src="script.js"></script>
+</body>
+
+</html>

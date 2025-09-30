@@ -1,0 +1,53 @@
+{
+  "name": "TrunkLink - Elephant Proximity Alerts",
+  "short_name": "TrunkLink",
+  "description": "Get instant alerts when elephants are near your location",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f9f0",
+  "theme_color": "#16a34a",
+  "orientation": "portrait-primary",
+  "categories": ["safety", "utilities", "navigation"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg viewBox='0 0 192 192' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%2316a34a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2315803d;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='192' height='192' rx='20' fill='url(%23grad)'/%3E%3Cpath d='M96 48c-8.837 0-16 7.163-16 16v16h-16c-8.837 0-16 7.163-16 16v32c0 8.837 7.163 16 16 16h64c8.837 0 16-7.163 16-16V96c0-8.837-7.163-16-16-16h-16V64c0-8.837-7.163-16-16-16zm0 8c4.418 0 8 3.582 8 8v16h-16V64c0-4.418 3.582-8 8-8z' fill='white'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%2316a34a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2315803d;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='512' height='512' rx='50' fill='url(%23grad)'/%3E%3Cpath d='M256 128c-23.564 0-42.667 19.103-42.667 42.667v42.666h-42.666C147.103 213.333 128 232.436 128 256v85.333c0 23.564 19.103 42.667 42.667 42.667h170.666c23.564 0 42.667-19.103 42.667-42.667V256c0-23.564-19.103-42.667-42.667-42.667h-42.666v-42.666C298.667 147.103 279.564 128 256 128zm0 21.333c11.782 0 21.333 9.551 21.333 21.334v42.666h-42.666v-42.666c0-11.783 9.551-21.334 21.333-21.334z' fill='white'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,%3Csvg width='320' height='640' viewBox='0 0 320 640' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='320' height='640' fill='%23f0f9f0'/%3E%3Ctext x='160' y='320' text-anchor='middle' fill='%2316a34a' font-size='24' font-family='Arial, sans-serif'%3ETrunkLink%3C/text%3E%3C/svg%3E",
+      "sizes": "320x640",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "TrunkLink Mobile View"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Subscribe to Alerts",
+      "short_name": "Subscribe",
+      "description": "Sign up for elephant proximity alerts",
+      "url": "/",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,%3Csvg viewBox='0 0 96 96' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='48' cy='48' r='48' fill='%2316a34a'/%3E%3Cpath d='M48 24c-4.418 0-8 3.582-8 8v8h-8c-4.418 0-8 3.582-8 8v16c0 4.418 3.582 8 8 8h32c4.418 0 8-3.582 8-8V48c0-4.418-3.582-8-8-8h-8v-8c0-4.418-3.582-8-8-8zm0 4c2.209 0 4 1.791 4 4v8h-8v-8c0-2.209 1.791-4 4-4z' fill='white'/%3E%3C/svg%3E",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
+}

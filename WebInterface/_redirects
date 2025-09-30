@@ -1,0 +1,11 @@
+# Redirects for Render deployment
+/  /index.html  200
+/*  /index.html  404
+
+# Service Worker with correct MIME type
+/sw.js  /sw.js  200
+  Content-Type: application/javascript
+
+# Manifest with correct MIME type
+/manifest.json  /manifest.json  200
+  Content-Type: application/manifest+json
